@@ -1,0 +1,1966 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Axion SPK Viewer</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="page-viewer">
+<header>
+  <h1>Axion SPK Viewer</h1>
+  <span class="file" id="fname">No file loaded</span>
+  <span class="spacer"></span>
+  <form id="urlForm" class="urlform" title="Load a .spk file from a web address">
+    <input type="url" id="urlIn" placeholder="https://…/recording.spk" aria-label=".spk file URL" required>
+    <button type="submit" id="urlBtn">Load URL</button>
+  </form>
+  <label class="btn" for="fileIn">Open .spk…</label>
+  <input type="file" id="fileIn" accept=".spk">
+  <button id="themeBtn" title="Toggle light / dark">Theme</button>
+</header>
+<main>
+  <div class="err" id="err" role="alert"></div>
+  <section id="drop">
+    <h2>Drop an Axion spike file (.spk) here</h2>
+    <p>or use <b>Open .spk…</b> for a file on this computer, or paste a web address in the box above and press <b>Load URL</b>.<br>
+       You can also drop a link onto the page. Files are parsed in your browser; local files are never uploaded.</p>
+    <p style="color:var(--muted);font-size:12px">URLs must allow cross-origin downloads (CORS): for example GitHub raw links, Zenodo, Figshare, OSF, or an S3/Cloud bucket with CORS enabled.
+       GitHub "blob" and Dropbox share links are converted automatically.</p>
+    <p style="color:var(--muted);font-size:12px">Format: AxIS / AxIS Navigator header v1.x, Spike_v1 block vectors (as written by Axion Maestro systems).</p>
+  </section>
+
+  <section id="app" hidden>
+    <div class="tiles" id="tiles"></div>
+
+    <div class="card replay">
+      <div class="toolbar">
+        <button id="playBtn" title="Play / pause (Space)">▶ Play</button>
+        <button id="stopBtn" title="Stop and return to the mean-rate map" disabled>■ Stop</button>
+        <label>Speed
+          <select id="speedSel">
+            <option value="0.1">0.1×</option><option value="0.25">0.25×</option><option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option><option value="2">2×</option><option value="5">5×</option>
+            <option value="10">10×</option><option value="30">30×</option><option value="60">60×</option>
+          </select>
+        </label>
+        <span id="replayTime" class="clock">0:00.000</span>
+        <span class="grow"></span>
+        <span style="color:var(--muted)">Activity replay · population spike rate · click or drag to seek · Space play/pause · ←/→ step</span>
+      </div>
+      <div class="wrap-rel"><canvas id="timeline"></canvas><canvas id="timelinePH" class="overlay"></canvas></div>
+    </div>
+
+    <div class="row r1">
+      <div class="card">
+        <h3 id="plateTitle">Plate map</h3>
+        <div class="sub" id="plateSub"></div>
+        <canvas id="plate"></canvas>
+        <div class="legend" id="plateLegend"></div>
+      </div>
+      <div class="card">
+        <h3>Spike raster</h3>
+        <div class="toolbar">
+          <span id="winLabel"></span><span class="grow"></span>
+          <span style="color:var(--muted)">Drag to zoom · click a row to select</span>
+          <select id="rasterRows" aria-label="Raster rows"><option value="active" selected>Electrodes with spikes</option><option value="all">All recorded electrodes</option></select>
+          <button id="resetZoom" disabled>Reset zoom</button>
+        </div>
+        <div class="wrap-rel"><canvas id="raster"></canvas><canvas id="rasterPH" class="overlay"></canvas><div id="brush"></div></div>
+      </div>
+    </div>
+
+    <div class="card" id="trCard" style="margin-bottom:16px">
+      <div class="toolbar" style="margin-bottom:2px">
+        <h3 style="margin:0">Signal trace</h3><span id="trTitle" style="color:var(--muted);font-size:12px"></span><span class="grow"></span>
+        <label>Show <select id="trMode"><option value="sel" selected>Selected electrode</option><option value="well">Every electrode of its well</option></select></label>
+        <label>Y scale <select id="trScale"><option value="auto" selected>Auto</option><option value="25">±25 µV</option><option value="50">±50 µV</option><option value="100">±100 µV</option><option value="200">±200 µV</option><option value="500">±500 µV</option></select></label>
+        <button id="trReset" disabled>Reset zoom</button>
+      </div>
+      <div class="sub" id="trNote"></div>
+      <div class="wrap-rel"><canvas id="trace"></canvas><div id="trBrush"></div></div>
+    </div>
+
+    <div class="toolbar" style="font-size:14px">Selected electrode: <span class="selname" id="selName">–</span>
+      <span id="selStats"></span><span class="grow"></span>
+      <button id="csvBtn" title="Spikes of the selected electrode in the current window">Export electrode (CSV)</button>
+      <button id="csvAllBtn" title="Every spike in the file, all electrodes">Export all spikes (CSV)</button>
+    </div>
+    <div class="row r2">
+      <div class="card"><h3>Waveforms</h3><div class="sub" id="wfSub"></div><canvas class="chart" id="wf"></canvas></div>
+      <div class="card"><h3>Firing rate over time</h3><div class="sub" id="frSub"></div><canvas class="chart" id="fr"></canvas></div>
+      <div class="card"><h3>Inter-spike interval distribution</h3><div class="sub" id="isiSub"></div><canvas class="chart" id="isi"></canvas></div>
+      <div class="card"><h3>Trigger amplitude over time</h3><div class="sub" id="ampSub"></div><canvas class="chart" id="amp"></canvas></div>
+    </div>
+
+    <div class="card" id="sortCard" style="margin-bottom:16px">
+      <div class="toolbar" style="margin-bottom:2px">
+        <h3 style="margin:0">Spike sorting</h3><span id="sortStatus"></span><span class="grow"></span>
+        <button id="sortSelBtn" title="Sort the selected electrode with the parameters below">Sort selected electrode</button>
+        <button id="sortAllBtn" title="Sort every electrode with spikes">Sort all electrodes</button>
+        <button id="sortClearBtn" disabled>Clear sorting</button>
+        <button id="unitCsvBtn" disabled title="One row per unit: spikes, rate, amplitude, SNR, ISI statistics">Export units (CSV)</button>
+      </div>
+      <details class="sortparams"><summary>Parameters (SAMS defaults) and method</summary>
+        <div class="pgrid">
+          <label title="Mean waveforms closer than this (dynamic time warping on min–max normalised templates) are merged">Template merge distance<input type="number" id="pMerge" value="1.5" step="0.1" min="0"></label>
+          <label title="Peaks and troughs must lie within (1 − overlap) × height of each other to merge">Peak/trough overlap<input type="number" id="pOverlap" value="0.7" step="0.05" min="0" max="1"></label>
+          <label title="Second spike of every pair closer than this is removed from the unit">Refractory period (ms)<input type="number" id="pRefr" value="1.5" step="0.1" min="0"></label>
+          <label title="Spikes whose waveform RMSE is further than this many SD from the unit's mean RMSE are removed">Outlier cutoff (SD)<input type="number" id="pSd" value="3" step="0.5" min="1"></label>
+          <label title="Units firing below this rate are dropped; electrodes below it are not sorted">Minimum unit rate (Hz)<input type="number" id="pRate" value="0.1" step="0.05" min="0"></label>
+          <label title="Largest number of clusters tried at each clustering step">Max. clusters per step<input type="number" id="pK" value="5" step="1" min="2" max="8"></label>
+          <button id="pReset">Defaults</button>
+        </div>
+        <div class="sub" style="margin-top:6px">Per electrode, following the SAMS pipeline (Ren et al. 2025): PCA of the waveforms → clusters on PC1–PC2, number chosen by the Davies–Bouldin index (k-means; SAMS uses spectral clustering) → waveform outliers removed → clusters that Hartigan's dip test finds multimodal on PC1 or PC2 are split → clusters with similar mean waveforms (dynamic time warping) are merged → final outlier and refractory-period clean-up, slow units dropped. Removed spikes are “unsorted”. Results are deterministic for a given file and parameters.</div>
+      </details>
+      <div id="sortSub"></div>
+      <div class="sortgrid">
+        <div><h4>Feature space <select id="pcPair" aria-label="Principal components shown"><option value="0,1">PC1 × PC2</option><option value="0,2">PC1 × PC3</option><option value="1,2">PC2 × PC3</option></select></h4><canvas id="sortPca"></canvas></div>
+        <div><h4>Feature space 3D <span class="toolbar" style="margin:0"><button id="spinBtn" title="Rotate the cloud continuously">Spin</button><button id="view3Btn" title="Back to the starting view">Reset view</button></span></h4><canvas id="sortPca3" aria-label="3D scatter of PC1, PC2 and PC3, coloured by unit"></canvas>
+          <div class="sub" style="margin-top:6px">PC1 × PC2 × PC3 on one common scale · drag to rotate · double-click to reset</div></div>
+        <div><h4>Unit templates</h4><canvas id="sortTpl"></canvas><div class="legend" id="tplLegend"></div></div>
+        <div><h4>Units <span class="toolbar" id="unitBtns" style="margin:0" hidden><button id="mergeBtn" disabled title="Merge the ticked units into one">Merge</button><button id="noiseBtn" disabled title="Move the ticked units to unsorted">Mark as noise</button></span></h4>
+          <div class="scroll"><table id="unitTable"><thead></thead><tbody></tbody></table></div>
+          <div class="sub" style="margin-top:6px">Tick units to merge them or mark them as noise · hover a row to highlight it.</div></div>
+      </div>
+    </div>
+
+    <div class="card" id="sbCard" style="margin-bottom:16px">
+      <div class="toolbar" style="margin-bottom:2px">
+        <h3 style="margin:0">Spike browser</h3><span id="sbTitle" style="color:var(--muted);font-size:12px"></span><span class="grow"></span>
+        <label>Y axis
+          <select id="sbY"><option value="amp" selected>Trigger amplitude (µV)</option><option value="ptp">Peak-to-peak (µV)</option><option value="pc1">PC1</option><option value="pc2">PC2</option></select>
+        </label>
+        <label title="Start and end of the selected time range: seconds (e.g. 385.2) or m:ss.sss (e.g. 6:25.2); press Enter to apply">Range
+          <input id="sbFrom" class="tbox" type="text" inputmode="decimal" placeholder="start" aria-label="Range start time">
+          – <input id="sbTo" class="tbox" type="text" inputmode="decimal" placeholder="end" aria-label="Range end time"> s</label>
+        <button id="sbPrev" title="Previous visible spike">◀ Prev</button>
+        <button id="sbNext" title="Next visible spike">Next ▶</button>
+        <button id="sbZoom" title="Zoom the raster and the charts to ±0.5 s around the selected spike or to the selected range" disabled>Show in raster</button>
+        <button id="sbClear" disabled>Clear</button>
+      </div>
+      <div class="sub">Every spike of the selected electrode over the whole recording, coloured by unit once sorted · click a spike to see its waveform · drag across time, or type a start and end time, to overlay all spikes in a range · hover an overlaid waveform for its time, click it to inspect it · untick a unit to hide it</div>
+      <div class="sbgrid">
+        <div><div class="wrap-rel"><canvas id="sbScatter"></canvas><div id="sbBrush"></div></div><div class="legend" id="sbLegend"></div></div>
+        <div><canvas id="sbWave"></canvas></div>
+      </div>
+      <div id="sbInfo"></div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="toolbar" style="margin-bottom:2px">
+        <h3 style="margin:0">Waveforms by electrode</h3><span class="grow"></span>
+        <label>Spikes shown
+          <select id="wgN"><option value="25">25</option><option value="100" selected>100</option><option value="250">250</option><option value="1000">1000</option></select>
+        </label>
+        <label>Y scale
+          <select id="wgScale"><option value="shared" selected>Shared</option><option value="each">Per electrode</option></select>
+        </label>
+      </div>
+      <div class="sub" id="wgSub"></div>
+      <div id="wgrid" class="wgrid"></div>
+    </div>
+
+    <details class="card" open>
+      <summary>Electrodes table</summary>
+      <label class="toolbar" style="margin:6px 0"><input type="checkbox" id="tblActive" checked> Only electrodes with spikes</label>
+      <div class="scroll"><table id="elTable"><thead></thead><tbody></tbody></table></div>
+    </details>
+
+    <details class="card">
+      <summary>File information &amp; recording settings</summary>
+      <div class="kv" id="info"></div>
+    </details>
+  </section>
+</main>
+<div id="tip"></div>
+
+<script>
+"use strict";
+/* =====================================================================
+ * Axion .spk parser (JavaScript port of Axion BioSystems' AxionFileLoader:
+ * AxisFile.m, EntryRecord.m, CombinedBlockVectorHeaderEntry.m,
+ * DiscontinuousBlockVectorHeaderEntry.m, SpikeDataSet.m, ChannelArray.m)
+ * ===================================================================== */
+const PLATES = {
+  0x0400000:"LinearSingleWell64",0x0400001:"P200D30S",0x0800000:"MEACreatorKit",0x1800000:"LinearSixWell",
+  0x1800001:"TwentyFourWell",0x1800002:"TwentyFourWellCircuit",0x1800003:"SixWell",0x1800004:"TwentyFourWellLumos",
+  0x1800005:"TwentyFourWellOptiClear",0x3000000:"LinearTwelveWell",0x3000001:"TwelveWell",0x3000002:"FortyEightWell",
+  0x3000003:"NinetySixWell",0x3000004:"FortyEightWellTransparent",0x3000006:"FortyEightWellLumos",
+  0x3000007:"FortyEightWellEStimPlus",0x3000008:"NinetySixWellCircuit",0x3000009:"NinetySixWellTransparent",
+  0x300000A:"NinetySixWellLumos",0x300000B:"FortyEightWellCircuit",0x300000C:"FortyEightWellAccuSpot",
+  0x300000D:"FortyEightWellOptiClear",0x300000E:"NinetySixWellOptiClear",0x3000015:"FortyEightWellOrganoid",
+  0x3000016:"TwelveWellTransparent"};
+const DATA_TYPES = ["Raw_v1","Spike_v1","NamedContinuousData"];
+const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8, a, b) { let c = 0xFFFFFFFF; for (let i = a; i < b; i++) c = CRC_TABLE[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+const utf8 = new TextDecoder("utf-8");
+
+function parseSpk(buf) {
+  const dv = new DataView(buf), u8 = new Uint8Array(buf), warnings = [];
+  let p = 0;
+  const rd = {
+    u8: () => dv.getUint8(p++),
+    u16: () => { const v = dv.getUint16(p, true); p += 2; return v; },
+    u32: () => { const v = dv.getUint32(p, true); p += 4; return v; },
+    i32: () => { const v = dv.getInt32(p, true); p += 4; return v; },
+    i64: () => { const v = dv.getUint32(p, true) + dv.getInt32(p + 4, true) * 4294967296; p += 8; return v; },
+    f64: () => { const v = dv.getFloat64(p, true); p += 8; return v; },
+    str: n => { const s = utf8.decode(u8.subarray(p, p + n)); p += n; return s; },
+    lstr: () => rd.str(rd.i32()),
+    date: () => { const a = []; for (let i = 0; i < 7; i++) a.push(rd.u16()); return a[0] ? new Date(a[0], a[1]-1, a[2], a[3], a[4], a[5], a[6]) : null; },
+  };
+  const records = n => { const out = []; for (let i = 0; i < n; i++) {
+      const lo = dv.getUint32(p, true), hiw = dv.getUint32(p + 4, true); p += 8;
+      const type = hiw >>> 24, hi = hiw & 0xFFFFFF;
+      out.push({ type: type <= 7 ? type : 0xFF, len: (hi === 0xFFFFFF && lo === 0xFFFFFFFF) ? Infinity : hi * 4294967296 + lo });
+    } return out; };
+
+  if (rd.str(8) !== "AxionBio") throw new Error("Not an Axion file: missing 'AxionBio' magic word.");
+  rd.u16(); const vmaj = rd.u16(), vmin = rd.u16(); p += 8;
+  if (rd.u32() !== 600) throw new Error("Incorrect legacy notes length field.");
+  if (vmaj !== 1) throw new Error(`Unsupported header version ${vmaj}.${vmin} (only 1.x is implemented).`);
+  const entriesStart = rd.i64();
+  let recs = records(123);
+  if (dv.getUint32(1018, true) !== crc32(u8, 0, 1018)) throw new Error("File header checksum is incorrect.");
+
+  const F = { version: `${vmaj}.${vmin}`, notes: [], tags: [], channels: [], channelIds: [], header: null, warnings };
+  p = entriesStart;
+  let done = false;
+  while (!done) {
+    for (const r of recs) {
+      const start = p;
+      if (r.type === 0) { done = true; break; }
+      if (r.type === 1) {            // NotesArray
+        for (let i = 0; i < Math.floor(r.len / 618); i++) {
+          const b = p, cs = (o, n) => utf8.decode(u8.subarray(b + o, b + o + n)).split("\0")[0].replace(/\r/g, "").trim();
+          F.notes.push({ Investigator: cs(0, 50), RecordingName: cs(50, 50), Description: cs(100, 500), Revision: dv.getUint32(b + 600, true) });
+          p += 618;
+        }
+      } else if (r.type === 2) {     // ChannelArray
+        F.plateType = rd.u32(); const n = rd.u32();
+        for (let i = 0; i < n; i++) {
+          const c = { wc: rd.u8(), wr: rd.u8(), ec: rd.u8(), er: rd.u8(), achk: rd.u8(), idx: rd.u8() }; rd.u16();
+          c.well = String.fromCharCode(64 + c.wr) + c.wc; c.label = `${c.well}_${c.ec}${c.er}`; c.i = i;
+          F.channels.push(c);
+        }
+      } else if (r.type === 7) {     // CombinedBlockVectorHeader
+        const h = {}; const p0 = p;
+        h.VersionMajor = rd.u16(); h.VersionMinor = rd.u16(); h.DataType = rd.u16(); h.SampleType = rd.u16();
+        h.SamplingFrequency = rd.f64(); h.VoltageScale = rd.f64();
+        h.NumChannelsPerBlock = rd.u32(); h.NumDataSetsPerBlock = rd.u32(); h.NumSamplesPerBlock = rd.u32();
+        h.VectorHeaderSize = rd.u32(); h.BlockHeaderSize = rd.u32();
+        h.BlockVectorStartTime = rd.date(); h.ExperimentStartTime = rd.date(); h.AddedDate = rd.date(); h.ModifiedDate = rd.date();
+        h.Duration = (h.VersionMajor > 1 || h.VersionMinor >= 1) ? rd.f64() : null;
+        h.Name = rd.lstr(); h.Description = rd.lstr();
+        h.DataRegionStart = rd.i64(); h.DataRegionLength = rd.i64();
+        if (rd.u32() !== crc32(u8, p0, p - 4)) throw new Error("Block-vector header checksum is incorrect.");
+        if (h.DataType === 1) {
+          const p1 = p, n = rd.u32();
+          for (let i = 0; i < n; i++) { const id = rd.u16(); F.channelIds.push([(id >> 8) & 0xFF, id & 0xFF]); }
+          h.DataSetName = rd.lstr();
+          if (rd.u32() !== crc32(u8, p1, p - 4)) throw new Error("Spike header checksum is incorrect.");
+        }
+        if (!F.header) F.header = h; else warnings.push("More than one block-vector set; only the first is shown.");
+      } else if (r.type === 6) {     // Tag
+        const t = { type: rd.u16() }; rd.date(); p += 16; t.rev = rd.u32();
+        try {
+          if (t.type === 11) { t.key = rd.lstr(); t.value = rd.lstr(); }
+          else if (t.type === 1) {
+            t.wc = rd.u8(); t.wr = rd.u8(); p += 2; const wt = rd.u8(); t.on = !!(wt & 1); t.control = !!(wt & 2);
+            if (start + r.len - p >= 12) { t.color = "#" + [rd.u8(), rd.u8(), rd.u8()].map(x => x.toString(16).padStart(2, "0")).join(""); t.what = rd.lstr(); t.info = rd.lstr(); }
+          }
+        } catch (e) { /* malformed tag payload: ignore */ }
+        F.tags.push(t);
+        p = start + r.len;
+      } else {                       // BlockVectorData and anything else: skip
+        p = r.len === Infinity ? buf.byteLength : start + r.len;
+      }
+    }
+    if (!done) {
+      if (p >= buf.byteLength) break;
+      const s = p;
+      if (rd.str(8) !== "AxionBio") throw new Error("Bad sub-header magic number at byte " + s);
+      recs = records(126);
+      if (dv.getUint32(s + 1016, true) !== crc32(u8, s, s + 1016)) throw new Error("Bad sub-header checksum.");
+      p = s + 1024;
+    }
+  }
+  const h = F.header;
+  if (!h) throw new Error("No block-vector header found. Is this a spike (.spk) file?");
+  if (h.DataType !== 1) throw new Error(`This file holds ${DATA_TYPES[h.DataType] || h.DataType} data, not spikes (Spike_v1).`);
+  if (h.NumChannelsPerBlock !== 1 || h.NumDataSetsPerBlock !== 1 || h.BlockHeaderSize < 30) throw new Error("Invalid Spike_v1 block layout.");
+
+  // metadata: key/value tags (latest revision) else notes
+  F.meta = {};
+  F.tags.filter(t => t.key !== undefined).sort((a, b) => a.rev - b.rev).forEach(t => F.meta[t.key] = t.value);
+  if (!Object.keys(F.meta).length && F.notes.length) { const n = F.notes[F.notes.length - 1]; F.meta = { RecordingName: n.RecordingName, Investigator: n.Investigator, Description: n.Description }; }
+  F.wells = {}; F.tags.filter(t => t.type === 1).forEach(t => F.wells[String.fromCharCode(64 + t.wr) + t.wc] = t);
+
+  // spikes
+  const lut = new Int32Array(65536).fill(-1);
+  F.channels.forEach(c => lut[c.achk * 256 + c.idx] = c.i);
+  const bs = h.BlockHeaderSize + 2 * h.NumSamplesPerBlock, n = Math.floor(h.DataRegionLength / bs), fs = h.SamplingFrequency;
+  const times = new Float64Array(n), ch = new Int32Array(n), trig = new Int32Array(n), sd = new Float32Array(n), thr = new Float32Array(n);
+  let o = h.DataRegionStart;
+  for (let i = 0; i < n; i++, o += bs) {
+    const start = dv.getUint32(o, true) + dv.getInt32(o + 4, true) * 4294967296;
+    trig[i] = dv.getInt32(o + 10, true);
+    times[i] = (start + trig[i]) / fs;
+    ch[i] = lut[dv.getUint8(o + 9) * 256 + dv.getUint8(o + 8)];
+    sd[i] = dv.getFloat64(o + 14, true); thr[i] = dv.getFloat64(o + 22, true);
+  }
+  // the viewer (raster, replay) relies on time-ordered spikes; sort if the file is not
+  let order = null;
+  for (let i = 1; i < n; i++) if (times[i] < times[i - 1]) { order = Int32Array.from({ length: n }, (_, k) => k).sort((a, b) => times[a] - times[b]); break; }
+  const perm = a => { if (!order) return a; const b = new a.constructor(n); for (let k = 0; k < n; k++) b[k] = a[order[k]]; return b; };
+  if (order) warnings.push("Spikes were not stored in time order; they were sorted on load.");
+  Object.assign(F, { dv, n, times: perm(times), ch: perm(ch), trig: perm(trig), sd: perm(sd), thr: perm(thr), blockSize: bs, fs });
+  F.waveOffset = i => h.DataRegionStart + (order ? order[i] : i) * bs + h.BlockHeaderSize;
+  return F;
+}
+
+/* =====================================================================
+ * App state & derived data
+ * ===================================================================== */
+let F = null;
+const S = { sel: -1, t0: 0, t1: 1, sort: { key: "well", dir: 1 } };
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt = (v, d = 2) => Number.isFinite(v) ? v.toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: 0 }) : "–";
+const uV = () => F.header.VoltageScale * 1e6;
+
+function prepare(F) { // note: F here is the freshly parsed file (shadows the global)
+  const nC = F.channels.length;
+  // per-channel spike index lists (spikes are time-ordered in the file; keep that order)
+  const counts = new Int32Array(nC);
+  for (let i = 0; i < F.n; i++) if (F.ch[i] >= 0) counts[F.ch[i]]++;
+  F.perCh = Array.from(counts, c => new Int32Array(c));
+  const fill = new Int32Array(nC);
+  for (let i = 0; i < F.n; i++) { const c = F.ch[i]; if (c >= 0) F.perCh[c][fill[c]++] = i; }
+  for (const arr of F.perCh) arr.sort((a, b) => F.times[a] - F.times[b]);
+  // recorded electrodes: header channel-ID list, else those with spikes
+  const byId = new Map(F.channels.map(c => [c.achk * 256 + c.idx, c.i]));
+  let rec = F.channelIds.map(([a, c]) => byId.get(a * 256 + c)).filter(x => x !== undefined);
+  if (!rec.length) rec = F.channels.filter(c => counts[c.i] > 0).map(c => c.i);
+  F.recorded = new Set(rec);
+  for (let c = 0; c < nC; c++) if (counts[c] > 0) F.recorded.add(c);
+  const key = c => [c.wr, c.wc, c.er, c.ec];
+  F.rows = [...F.recorded].sort((a, b) => { const A = key(F.channels[a]), B = key(F.channels[b]); for (let k = 0; k < 4; k++) if (A[k] !== B[k]) return A[k] - B[k]; return 0; });
+  F.rowOf = new Map(F.rows.map((c, r) => [c, r]));
+  F.duration = F.header.Duration || (F.n ? F.times[F.n - 1] : 1);
+  F.rate = Array.from(counts, c => c / F.duration);
+  F.counts = counts;
+  // amplitude at trigger sample (µV), per spike
+  F.amp = new Float32Array(F.n); const s = F.header.VoltageScale * 1e6;
+  for (let i = 0; i < F.n; i++) { const t = Math.min(Math.max(F.trig[i], 0), F.header.NumSamplesPerBlock - 1); F.amp[i] = F.dv.getInt16(F.waveOffset(i) + 2 * t, true) * s; }
+  // plate geometry from channel array
+  F.geo = { WR: 0, WC: 0, ER: 0, EC: 0 };
+  for (const c of F.channels) { F.geo.WR = Math.max(F.geo.WR, c.wr); F.geo.WC = Math.max(F.geo.WC, c.wc); F.geo.ER = Math.max(F.geo.ER, c.er); F.geo.EC = Math.max(F.geo.EC, c.ec); }
+  F.settings = parseSettings(F.header.Description || "");
+  F.sorting = new Map(); F.unitOf = new Int16Array(F.n).fill(-1); // spike sorting results (per electrode) and unit of every spike (-1 = not sorted)
+}
+
+function parseSettings(desc) {
+  const sections = []; let cur = { title: "General", rows: [] };
+  for (const raw of desc.split(/\r?\n/)) {
+    const line = raw.trim(); if (!line) continue;
+    const i = line.indexOf(","); const k = i < 0 ? line : line.slice(0, i).trim(), v = i < 0 ? "" : line.slice(i + 1).trim();
+    if (!k && !v) continue;
+    if (k && !v) { if (cur.rows.length) sections.push(cur); cur = { title: k, rows: [] }; continue; }
+    cur.rows.push([k, v]);
+  }
+  if (cur.rows.length) sections.push(cur);
+  return sections;
+}
+
+function spikesInWindow(c) {
+  const idx = F.perCh[c], t = F.times; if (!idx) return [];
+  let a = 0, b = idx.length;
+  let lo = 0, hi = idx.length; while (lo < hi) { const m = (lo + hi) >> 1; if (t[idx[m]] < S.t0) lo = m + 1; else hi = m; } a = lo;
+  lo = a; hi = idx.length; while (lo < hi) { const m = (lo + hi) >> 1; if (t[idx[m]] <= S.t1) lo = m + 1; else hi = m; } b = lo;
+  return idx.subarray(a, b);
+}
+
+/* =====================================================================
+ * Drawing helpers
+ * ===================================================================== */
+function setup(cv) {
+  const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  ctx.font = `11px ${css("--font")}`; return { ctx, W, H };
+}
+function niceTicks(min, max, n = 5) {
+  if (!(max > min)) return [min];
+  const step0 = (max - min) / n, mag = 10 ** Math.floor(Math.log10(step0)), e = step0 / mag;
+  const step = (e >= 7.5 ? 10 : e >= 3.5 ? 5 : e >= 1.5 ? 2 : 1) * mag, out = [];
+  for (let v = Math.ceil(min / step) * step; v <= max + step * 1e-9; v += step) out.push(+v.toPrecision(12));
+  return out;
+}
+function fmtTime(s) { if (Math.abs(s) >= 120) { const t = Math.round(s), m = Math.floor(t / 60); return `${m}:${String(t - m * 60).padStart(2, "0")}`; } return fmt(s, s < 1 ? 3 : 1) + " s"; }
+// frame with y grid + axes; returns plot box and scales
+function frame(ctx, W, H, { x0, x1, y0, y1, xTicks, yTicks, xFmt = v => fmt(v), yFmt = v => fmt(v), xLabel = "", yLabel = "", logX = false }) {
+  const L = 48, R = 12, T = 8, B = 34, pw = W - L - R, ph = H - T - B;
+  const fx = logX ? v => L + (Math.log10(v) - Math.log10(x0)) / (Math.log10(x1) - Math.log10(x0)) * pw : v => L + (v - x0) / (x1 - x0) * pw;
+  const fy = v => T + ph - (v - y0) / (y1 - y0) * ph;
+  ctx.lineWidth = 1; ctx.fillStyle = css("--muted"); ctx.textBaseline = "middle"; ctx.textAlign = "right";
+  for (const v of yTicks) { const y = Math.round(fy(v)) + .5; ctx.strokeStyle = css("--grid"); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.fillText(yFmt(v), L - 6, y); }
+  ctx.strokeStyle = css("--axis"); ctx.beginPath(); ctx.moveTo(L, T + ph + .5); ctx.lineTo(L + pw, T + ph + .5); ctx.stroke();
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  for (const v of xTicks) { const x = fx(v); if (x < L - 1 || x > L + pw + 1) continue; ctx.fillText(xFmt(v), x, T + ph + 5); }
+  ctx.fillText(xLabel, L + pw / 2, H - 13);
+  ctx.save(); ctx.translate(11, T + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = "middle"; ctx.fillText(yLabel, 0, 0); ctx.restore();
+  return { L, T, pw, ph, fx, fy };
+}
+const C = {}; // cached theme colours (refreshed by drawAll; avoids getComputedStyle per cell / frame)
+function readColors() {
+  C.stops = [0, 1, 2, 3, 4, 5, 6].map(i => css("--seq-" + i)).map(h => [1, 3, 5].map(k => parseInt(h.slice(k, k + 2), 16)));
+  for (const k of ["muted", "grid", "empty", "ink", "ink-2", "accent", "accent-wash", "axis", "surface"]) C[k] = css("--" + k);
+  C.cat = [1, 2, 3, 4, 5, 6, 7, 8].map(i => css("--cat-" + i));
+}
+function seqColor(f) { // f in [0,1] -> interpolated sequential ramp
+  if (!C.stops) readColors();
+  const stops = C.stops;
+  const x = Math.min(Math.max(f, 0), 1) * 6, i = Math.min(Math.floor(x), 5), r = x - i;
+  return `rgb(${stops[i].map((v, k) => Math.round(v + (stops[i + 1][k] - v) * r)).join(",")})`;
+}
+function emptyMsg(ctx, W, H, msg) { ctx.fillStyle = css("--muted"); ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = `13px ${css("--font")}`; ctx.fillText(msg, W / 2, H / 2); }
+
+const tip = $("tip");
+function showTip(e, html) { tip.innerHTML = html; tip.style.display = "block"; const r = tip.getBoundingClientRect(); let x = e.clientX + 14, y = e.clientY + 14; if (x + r.width > innerWidth - 8) x = e.clientX - r.width - 14; if (y + r.height > innerHeight - 8) y = e.clientY - r.height - 14; tip.style.left = x + "px"; tip.style.top = y + "px"; }
+function hideTip() { tip.style.display = "none"; }
+
+/* =====================================================================
+ * Views
+ * ===================================================================== */
+const hit = { plate: [], wf: null, fr: null, isi: null, amp: null, raster: null };
+
+function drawTiles() {
+  const h = F.header, active = F.counts.filter(c => c > 0).length, plate = plateName();
+  const st = h.ExperimentStartTime;
+  const tiles = [
+    ["Spikes", fmt(F.n, 0), `${fmt(F.n / F.duration, 1)} spikes/s overall`],
+    ["Active electrodes", `${active} / ${F.recorded.size}`, `${F.channels.length} electrodes on plate`],
+    ["Duration", fmtTime(F.duration), st ? st.toLocaleString() : ""],
+    ["Sampling rate", fmt(h.SamplingFrequency / 1000, 3) + " kHz", `${h.NumSamplesPerBlock} samples / spike (${fmt(h.NumSamplesPerBlock / h.SamplingFrequency * 1000, 2)} ms)`],
+    ["Plate", plate, `${F.geo.WR}×${F.geo.WC} wells · ${F.geo.EC}×${F.geo.ER} electrode grid`],
+  ];
+  if (F.sorting.size) tiles.push(["Sorted units", fmt(totalUnits(), 0), `on ${F.sorting.size} sorted electrode${F.sorting.size > 1 ? "s" : ""}`]);
+  $("tiles").innerHTML = tiles.map(([k, v, s]) => `<div class="tile"><div class="k">${k}</div><div class="v">${esc(v)}</div><div class="s">${esc(s)}</div></div>`).join("");
+}
+function plateName() {
+  for (const sec of F.settings) for (const [k, v] of sec.rows) if (k === "Plate Type" && v) return v;
+  return (PLATES[F.plateType] || `0x${(F.plateType >>> 0).toString(16)}`).replace(/([a-z])([A-Z])/g, "$1 $2");
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function drawPlate() {
+  const cv = $("plate"), { WR, WC, ER, EC } = F.geo;
+  cv.style.height = Math.max(220, Math.min(460, cv.clientWidth * (WR / WC) + 30)) + "px";
+  const { ctx, W, H } = setup(cv);
+  const L = 22, T = 18, gap = 4, ww = (W - L - 2) / WC, wh = (H - T - 2) / WR;
+  const replay = P.active, maxRate = Math.max(...F.rate, 1e-9);
+  const scaleMax = replay ? P.scaleMax : maxRate, val = replay ? instRates(P.t) : F.rate;
+  hit.plate = [];
+  ctx.fillStyle = C.muted; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  for (let c = 1; c <= WC; c++) ctx.fillText(c, L + (c - .5) * ww, T / 2);
+  for (let r = 1; r <= WR; r++) ctx.fillText(String.fromCharCode(64 + r), L / 2, T + (r - .5) * wh);
+  // wells
+  ctx.strokeStyle = C.grid; ctx.lineWidth = 1;
+  for (let r = 1; r <= WR; r++) for (let c = 1; c <= WC; c++) {
+    const x = L + (c - 1) * ww + gap / 2, y = T + (r - 1) * wh + gap / 2;
+    ctx.beginPath(); ctx.roundRect(x + .5, y + .5, ww - gap - 1, wh - gap - 1, 4); ctx.stroke();
+  }
+  for (const ch of F.channels) {
+    const wx = L + (ch.wc - 1) * ww + gap / 2 + 3, wy = T + (ch.wr - 1) * wh + gap / 2 + 3;
+    const cw = (ww - gap - 6) / EC, chh = (wh - gap - 6) / ER;
+    const x = wx + (ch.ec - 1) * cw, y = wy + (ch.er - 1) * chh, w = cw - 1.5, hh = chh - 1.5;
+    const rec = F.recorded.has(ch.i), v = val[ch.i];
+    if (!rec) { ctx.fillStyle = C.empty; ctx.globalAlpha = .55; }
+    else if (!(v > (replay ? 0.02 * scaleMax : 0))) { ctx.fillStyle = C.empty; }
+    else ctx.fillStyle = seqColor(0.08 + 0.92 * Math.min(1, v / scaleMax));
+    ctx.beginPath(); ctx.roundRect(x, y, w, hh, Math.min(2, w / 4)); ctx.fill(); ctx.globalAlpha = 1;
+    if (ch.i === S.sel) { ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(x - 1, y - 1, w + 2, hh + 2, 3); ctx.stroke(); }
+    hit.plate.push({ x, y, w, h: hh, c: ch.i });
+  }
+  const key = `${replay}|${P.tau}|${scaleMax}|${C.ink}`;
+  if (key === hit.plateKey) return;  // legend unchanged: skip DOM work during playback
+  hit.plateKey = key;
+  $("plateTitle").textContent = replay ? "Plate map · replay" : "Plate map";
+  $("plateSub").textContent = replay
+    ? `Instantaneous firing rate at the playhead (exponential smoothing, τ = ${fmtDur(P.tau)})`
+    : `Mean firing rate per electrode over the whole recording · ${F.recorded.size} recorded electrodes`;
+  $("plateLegend").innerHTML = `<span>0 Hz</span><span class="ramp" style="background:linear-gradient(90deg,${[0, .25, .5, .75, 1].map(f => seqColor(.08 + .92 * f)).join(",")})"></span><span>${replay ? "≥ " : ""}${fmt(scaleMax, 1)} Hz</span>
+    <span style="margin-left:12px"><span class="sw" style="background:var(--empty)"></span> ${replay ? "silent" : "recorded, no spikes"} / not recorded (faded)</span>`;
+}
+const fmtDur = s => s >= 1 ? fmt(s, 2) + " s" : fmt(s * 1000, 0) + " ms";
+function fmtClock(t) { const m = Math.floor(t / 60), s = t - m * 60; return `${m}:${s.toFixed(3).padStart(6, "0")}`; }
+
+/* ---------------------------------------------------------------------
+ * Replay: instantaneous rate per electrode = Σ exp(-(t - tᵢ)/τ) / τ
+ * over spikes tᵢ ≤ t (truncated at 6τ). τ scales with playback speed so
+ * that a spike stays visible for ~0.1 s of wall-clock time.
+ * --------------------------------------------------------------------- */
+const P = { active: false, playing: false, t: 0, speed: 1, tau: 0.1, scaleMax: 1, last: 0, raf: 0, buf: null };
+function instRates(t) {
+  if (!P.buf || P.buf.length !== F.channels.length) P.buf = new Float64Array(F.channels.length);
+  const r = P.buf; r.fill(0);
+  const tau = P.tau, lo = lowerBound(F.times, t - 6 * tau), hi = lowerBound(F.times, t + 1e-12);
+  for (let i = lo; i < hi; i++) { const c = F.ch[i]; if (c >= 0) r[c] += Math.exp((F.times[i] - t) / tau); }
+  for (let c = 0; c < r.length; c++) r[c] /= tau;
+  return r;
+}
+function setSpeed(v) {
+  P.speed = v; P.tau = 0.1 * Math.max(v, 0.5);
+  // colour scale: fixed per speed so flashes are comparable; ≥ 1 spike/τ and ≥ 3× the busiest mean rate
+  P.scaleMax = Math.max(3 * Math.max(...F.rate), 1 / P.tau);
+  if (P.active) renderReplay();
+}
+function renderReplay() {
+  if (!F) return;
+  const span = S.t1 - S.t0;
+  if (P.active && span < F.duration - 1e-9 && (P.t > S.t1 || P.t < S.t0)) { // keep playhead inside a zoomed window
+    const a = Math.min(Math.max(0, P.t - (P.playing ? 0 : span / 2)), F.duration - span); setWindow(a, a + span);
+  }
+  drawPlate(); drawPlayheads();
+  $("replayTime").textContent = `${fmtClock(P.t)} / ${fmtClock(F.duration)}`;
+  $("playBtn").textContent = P.playing ? "❚❚ Pause" : "▶ Play";
+  $("stopBtn").disabled = !P.active;
+}
+function tick(now) {
+  if (!P.playing) return;
+  const dt = Math.min((now - P.last) / 1000, 0.1); P.last = now;
+  P.t += dt * P.speed;
+  if (P.t >= F.duration) { P.t = F.duration; P.playing = false; }
+  renderReplay();
+  if (P.playing) P.raf = requestAnimationFrame(tick);
+}
+function play() { if (!F) return; if (P.t >= F.duration) P.t = 0; P.active = true; P.playing = true; P.last = performance.now(); cancelAnimationFrame(P.raf); P.raf = requestAnimationFrame(tick); renderReplay(); }
+function pause() { P.playing = false; cancelAnimationFrame(P.raf); renderReplay(); }
+function stopReplay() { P.playing = false; P.active = false; P.t = 0; cancelAnimationFrame(P.raf); renderReplay(); }
+function seek(t) { P.t = Math.min(Math.max(0, t), F.duration); P.active = true; renderReplay(); }
+
+function drawTimeline() {
+  const cv = $("timeline"), { ctx, W, H } = setup(cv);
+  const L = 58, R = 10, T = 4, B = 18, pw = W - L - R, ph = H - T - B, nb = Math.max(10, Math.floor(pw / 2)), bw = F.duration / nb;
+  if (!hit.tl || hit.tl.nb !== nb || hit.tl.F !== F) {
+    const bins = new Float64Array(nb);
+    for (let i = 0; i < F.n; i++) bins[Math.min(nb - 1, Math.floor(F.times[i] / bw))]++;
+    for (let b = 0; b < nb; b++) bins[b] /= bw;
+    hit.tl = { nb, bins, F, max: Math.max(...bins, 1e-9) };
+  }
+  Object.assign(hit.tl, { L, T, pw, ph, bw });
+  const { bins, max } = hit.tl, fx = t => L + t / F.duration * pw;
+  if (S.t1 - S.t0 < F.duration - 1e-9) { ctx.fillStyle = C["accent-wash"]; ctx.fillRect(fx(S.t0), T, Math.max(2, fx(S.t1) - fx(S.t0)), ph); }
+  ctx.fillStyle = C["ink-2"]; ctx.globalAlpha = .7;
+  for (let b = 0; b < nb; b++) { const h = bins[b] / max * ph; if (h > 0) ctx.fillRect(L + b * pw / nb, T + ph - h, Math.max(1, pw / nb - 0.5), h); }
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = C.axis; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(L, T + ph + .5); ctx.lineTo(L + pw, T + ph + .5); ctx.stroke();
+  ctx.fillStyle = C.muted; ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillText(fmt(max, 0) + " /s", L - 6, T + 6);
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  for (const v of niceTicks(0, F.duration, Math.max(3, Math.floor(pw / 90)))) ctx.fillText(fmtTime(v), fx(v), T + ph + 4);
+  drawPlayheads();
+}
+function drawPlayheads() {
+  // timeline playhead and raster playhead live on overlay canvases so playback never redraws 180k ticks
+  for (const [id, g, map] of [["timelinePH", hit.tl, t => g => g.L + t / F.duration * g.pw], ["rasterPH", hit.raster, t => g => g.L + (t - S.t0) / (S.t1 - S.t0) * g.pw]]) {
+    const cv = $(id); if (!g) continue;
+    const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+    if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+    if (!P.active) continue;
+    const x = map(P.t)(g); if (x < g.L - 1 || x > g.L + g.pw + 1) continue;
+    ctx.fillStyle = C.accent; ctx.fillRect(Math.round(x) - 1, g.T, 2, g.ph);
+    ctx.beginPath(); ctx.moveTo(x - 5, g.T); ctx.lineTo(x + 5, g.T); ctx.lineTo(x, g.T + 6); ctx.fill();
+  }
+}
+
+// raster rows: electrodes with spikes (default) or every recorded electrode
+function rasterRows() { return $("rasterRows").value === "all" ? F.rows : F.rows.filter(c => F.counts[c] > 0 || c === S.sel); }
+function drawRaster() {
+  const cv = $("raster"), list = rasterRows(), rows = list.length, rowOf = new Map(list.map((c, r) => [c, r]));
+  // grow with the number of rows (large plates / dense electrode grids), within limits
+  const wantH = Math.round(Math.min(1400, Math.max(innerWidth <= 600 ? 420 : 520, rows * 7 + 32))) + "px";
+  if (cv.style.height !== wantH) cv.style.height = wantH;
+  const { ctx, W, H } = setup(cv);
+  const L = 58, R = 10, T = 6, B = 26, pw = W - L - R, ph = H - T - B, rh = ph / Math.max(rows, 1);
+  const fx = t => L + (t - S.t0) / (S.t1 - S.t0) * pw;
+  hit.raster = { L, T, pw, ph, rh, rows: list };
+  // well bands + labels
+  let lastWell = null, wellY = -1e9;
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  list.forEach((c, r) => {
+    const ch = F.channels[c], y = T + r * rh, first = ch.well !== lastWell;
+    if (c === S.sel) { ctx.fillStyle = css("--accent-wash"); ctx.fillRect(L, y, pw, rh); }
+    if (first) {
+      if (lastWell !== null) { ctx.strokeStyle = css("--grid"); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, Math.round(y) + .5); ctx.lineTo(L + pw, Math.round(y) + .5); ctx.stroke(); }
+      lastWell = ch.well;
+    }
+    if (rh >= 9) { ctx.fillStyle = c === S.sel ? css("--ink") : css("--muted"); ctx.fillText(ch.label, L - 6, y + rh / 2); }
+    else if (first) { ctx.fillStyle = css("--ink-2"); ctx.textBaseline = "top"; ctx.fillText(ch.well, L - 6, y + 3); ctx.textBaseline = "middle"; wellY = y; }
+    else if (c === S.sel && y - wellY > 14) { ctx.fillStyle = css("--ink"); ctx.fillText(ch.label, L - 6, y + rh / 2); }
+  });
+  // ticks
+  const lo = lowerBound(F.times, S.t0), hi = lowerBound(F.times, S.t1 + 1e-12);
+  const inkCol = css("--ink-2"), selCol = css("--accent"), tickH = Math.max(1, rh - (rh > 4 ? 2 : 0));
+  ctx.fillStyle = inkCol; ctx.globalAlpha = .85;
+  const tw = Math.max(1, Math.min(2, pw / ((S.t1 - S.t0) * F.fs) )) ;
+  for (let i = lo; i < hi; i++) {
+    const r = rowOf.get(F.ch[i]); if (r === undefined || F.ch[i] === S.sel) continue;
+    ctx.fillRect(Math.floor(fx(F.times[i])), T + r * rh + (rh - tickH) / 2, tw, tickH);
+  }
+  ctx.globalAlpha = 1;
+  if (S.sel >= 0 && rowOf.has(S.sel)) {
+    ctx.fillStyle = selCol; const r = rowOf.get(S.sel), sorted = F.sorting.has(S.sel);
+    for (const i of spikesInWindow(S.sel)) if (sorted) { ctx.fillStyle = unitColor(F.unitOf[i]); ctx.fillRect(Math.floor(fx(F.times[i])), T + r * rh + (rh - tickH) / 2, tw, tickH); } else ctx.fillRect(Math.floor(fx(F.times[i])), T + r * rh + (rh - tickH) / 2, tw, tickH);
+  }
+  // x axis
+  ctx.strokeStyle = css("--axis"); ctx.beginPath(); ctx.moveTo(L, T + ph + .5); ctx.lineTo(L + pw, T + ph + .5); ctx.stroke();
+  ctx.fillStyle = css("--muted"); ctx.textAlign = "center"; ctx.textBaseline = "top";
+  for (const v of niceTicks(S.t0, S.t1, Math.max(3, Math.floor(pw / 90)))) ctx.fillText(fmtTime(v), fx(v), T + ph + 6);
+  $("winLabel").textContent = `Window ${fmtTime(S.t0)} – ${fmtTime(S.t1)} · ${fmt(hi - lo, 0)} spikes`;
+  $("resetZoom").disabled = S.t0 <= 0 && S.t1 >= F.duration;
+}
+function lowerBound(arr, v) { let lo = 0, hi = arr.length; while (lo < hi) { const m = (lo + hi) >> 1; if (arr[m] < v) lo = m + 1; else hi = m; } return lo; }
+
+function drawWaveforms() {
+  const cv = $("wf"), { ctx, W, H } = setup(cv);
+  const idx = S.sel >= 0 ? spikesInWindow(S.sel) : [];
+  if (!idx.length) { $("wfSub").textContent = ""; hit.wf = null; return emptyMsg(ctx, W, H, "No spikes in this window"); }
+  const ns = F.header.NumSamplesPerBlock, sc = uV(), MAXN = 400, step = Math.max(1, idx.length / MAXN);
+  const pick = []; for (let k = 0; k < idx.length && pick.length < MAXN; k += step) pick.push(idx[Math.floor(k)]);
+  const trig0 = F.trig[pick[0]], waves = pick.map(i => { const o = F.waveOffset(i), a = new Float32Array(ns); for (let k = 0; k < ns; k++) a[k] = F.dv.getInt16(o + 2 * k, true) * sc; return a; });
+  const mean = new Float32Array(ns), sdv = new Float32Array(ns);
+  for (const w of waves) for (let k = 0; k < ns; k++) mean[k] += w[k] / waves.length;
+  for (const w of waves) for (let k = 0; k < ns; k++) sdv[k] += (w[k] - mean[k]) ** 2 / waves.length;
+  for (let k = 0; k < ns; k++) sdv[k] = Math.sqrt(sdv[k]);
+  const all = waves.flatMap(w => Array.from(w)).sort((a, b) => a - b);
+  let y0 = all[Math.floor(all.length * .005)], y1 = all[Math.floor(all.length * .995)]; const pad = (y1 - y0) * .1; y0 -= pad; y1 += pad;
+  const ms = k => (k - trig0) / F.fs * 1000, x0 = ms(0), x1 = ms(ns - 1);
+  const fr = frame(ctx, W, H, { x0, x1, y0, y1, xTicks: niceTicks(x0, x1, 6), yTicks: niceTicks(y0, y1, 5), xLabel: "Time from trigger (ms)", yLabel: "µV" });
+  ctx.save(); ctx.beginPath(); ctx.rect(fr.L, 0, fr.pw, fr.T + fr.ph); ctx.clip();
+  ctx.strokeStyle = css("--ink-2"); ctx.globalAlpha = Math.max(.04, Math.min(.35, 6 / waves.length)); ctx.lineWidth = 1;
+  for (const w of waves) { ctx.beginPath(); for (let k = 0; k < ns; k++) { const X = fr.fx(ms(k)), Y = fr.fy(w[k]); k ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); } ctx.stroke(); }
+  ctx.globalAlpha = 1; ctx.strokeStyle = css("--accent"); ctx.lineWidth = 2; ctx.beginPath();
+  for (let k = 0; k < ns; k++) { const X = fr.fx(ms(k)), Y = fr.fy(mean[k]); k ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); } ctx.stroke();
+  ctx.strokeStyle = css("--axis"); ctx.setLineDash([3, 3]); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(fr.fx(0), fr.T); ctx.lineTo(fr.fx(0), fr.T + fr.ph); ctx.stroke(); ctx.setLineDash([]);
+  ctx.restore();
+  hit.wf = { fr, mean, sdv, ms, ns };
+  const thrUV = F.sd[idx[0]] * 1e6 * F.thr[idx[0]];
+  $("wfSub").innerHTML = `${pick.length < idx.length ? `${pick.length} of ${fmt(idx.length, 0)}` : fmt(idx.length, 0)} spikes overlaid (grey) · <span style="color:var(--accent)">━</span> mean · detection threshold ≈ ${fmt(F.thr[idx[0]], 1)}×SD (${fmt(thrUV, 1)} µV)`;
+}
+
+/* ---------------------------------------------------------------------
+ * Waveforms by electrode: small multiples, one panel per electrode, laid
+ * out on each well's physical electrode grid. Each spike is aligned on its
+ * own trigger sample; the mean is drawn in the accent colour.
+ * --------------------------------------------------------------------- */
+function readWave(i, sc) { const ns = F.header.NumSamplesPerBlock, o = F.waveOffset(i), a = new Float32Array(ns); for (let k = 0; k < ns; k++) a[k] = F.dv.getInt16(o + 2 * k, true) * sc; return a; }
+function pctl(sorted, q) { return sorted.length ? sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(sorted.length * q)))] : 0; }
+
+function drawWaveGrid() {
+  const grid = $("wgrid"), N = +$("wgN").value, shared = $("wgScale").value === "shared";
+  const ns = F.header.NumSamplesPerBlock, sc = uV(), fs = F.fs;
+  // (re)build one block per well that has recorded electrodes
+  const wells = [...new Set(F.rows.map(c => F.channels[c].well))];
+  if (grid.dataset.key !== F.name + wells.join()) {
+    grid.dataset.key = F.name + wells.join();
+    grid.style.gridTemplateColumns = `repeat(auto-fill, minmax(${Math.max(280, F.geo.EC * 80)}px, 1fr))`;
+    grid.innerHTML = wells.map(w => `<div class="wwell"><h4>${w}<span data-w="${w}"></span></h4><canvas data-w="${w}"></canvas></div>`).join("");
+  }
+  // collect waveforms per electrode
+  const data = new Map(); let pooled = [];
+  for (const c of F.rows) {
+    const idx = spikesInWindow(c), step = Math.max(1, idx.length / N), pick = [];
+    for (let k = 0; k < idx.length && pick.length < N; k += step) pick.push(idx[Math.floor(k)]);
+    const waves = pick.map(i => readWave(i, sc)), trigs = pick.map(i => F.trig[i]);
+    const mean = new Float32Array(ns); for (const w of waves) for (let k = 0; k < ns; k++) mean[k] += w[k] / waves.length;
+    const vals = new Float32Array(waves.length * ns); waves.forEach((w, j) => vals.set(w, j * ns)); vals.sort();
+    let mn = Infinity, mx = -Infinity; for (const v of mean) { mn = Math.min(mn, v); mx = Math.max(mx, v); }
+    const trigMed = trigs.length ? [...trigs].sort((a, b) => a - b)[trigs.length >> 1] : 0;
+    let umeans = null; // per-unit means once the electrode is sorted
+    if (F.sorting.has(c) && F.sorting.get(c).units.length) {
+      const acc = new Map(); pick.forEach((i, j) => { const u = F.unitOf[i]; if (u <= 0) return; if (!acc.has(u)) acc.set(u, { u, n: 0, mean: new Float32Array(ns) }); const a = acc.get(u); a.n++; for (let k = 0; k < ns; k++) a.mean[k] += waves[j][k]; });
+      umeans = [...acc.values()].sort((a, b) => b.u - a.u); for (const a of umeans) for (let k = 0; k < ns; k++) a.mean[k] /= a.n;
+    }
+    data.set(c, { n: idx.length, shown: pick.length, waves, trigs, mean, trigMed, umeans, lo: pctl(vals, .005), hi: pctl(vals, .995), ptp: waves.length ? mx - mn : NaN, mn, mx });
+    if (shared) { const s = Math.max(1, Math.floor(vals.length / 4000)); for (let k = 0; k < vals.length; k += s) pooled.push(vals[k]); }
+  }
+  let gLo = -1, gHi = 1;
+  if (shared && pooled.length) { pooled.sort((a, b) => a - b); gLo = pctl(pooled, .002); gHi = pctl(pooled, .998); const m = Math.max(Math.abs(gLo), Math.abs(gHi)) * 1.1; gLo = -m; gHi = m; }
+  const pre = [...data.values()].find(d => d.waves.length)?.trigMed ?? 0;
+  $("wgSub").innerHTML = `Up to ${N} spikes per electrode from the current window (${fmtTime(S.t0)} – ${fmtTime(S.t1)}), aligned on the trigger (dashed line) · each panel spans ${fmt(-pre / fs * 1000, 2)} to ${fmt((ns - 1 - pre) / fs * 1000, 2)} ms · <span style="color:var(--accent)">━</span> mean` + (F.sorting.size ? " (one coloured mean per unit on sorted electrodes)" : "")
+    + (shared ? ` · shared y-axis ±${fmt(gHi, 0)} µV` : " · y-axis scaled per electrode (range shown in each panel)") + " · click a panel to select";
+  hit.wg = [];
+  for (const cv of grid.querySelectorAll("canvas")) {
+    const w = cv.dataset.w, chans = F.channels.filter(ch => ch.well === w), { ER, EC } = F.geo;
+    cv.style.height = Math.round(cv.clientWidth * ER / EC * 0.72) + "px";
+    const { ctx, W, H } = setup(cv), g = 4, cw = (W - g * (EC - 1)) / EC, chh = (H - g * (ER - 1)) / ER;
+    let wellSpikes = 0;
+    for (const ch of chans) {
+      const x = (ch.ec - 1) * (cw + g), y = (ch.er - 1) * (chh + g), d = data.get(ch.i);
+      ctx.lineWidth = 1;
+      if (!d) { // not recorded (e.g. the well's reference position)
+        ctx.strokeStyle = C.grid; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.roundRect(x + .5, y + .5, cw - 1, chh - 1, 6); ctx.stroke(); ctx.setLineDash([]);
+        if (cw >= 76) { ctx.fillStyle = C.muted; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("not recorded", x + cw / 2, y + chh / 2); }
+        continue;
+      }
+      wellSpikes += d.n;
+      ctx.fillStyle = C.surface; ctx.strokeStyle = ch.i === S.sel ? C.accent : C.grid; ctx.lineWidth = ch.i === S.sel ? 2 : 1;
+      ctx.beginPath(); ctx.roundRect(x + .5, y + .5, cw - 1, chh - 1, 6); ctx.fill(); ctx.stroke();
+      const lo = shared ? gLo : d.lo - (d.hi - d.lo) * .1, hi = shared ? gHi : d.hi + (d.hi - d.lo) * .1;
+      const T = 16, B = 4, px = 4, ph = chh - T - B, pw = cw - 2 * px;
+      const fx = s => x + px + (s + d.trigMed) / (ns - 1) * pw, fy = v => y + T + ph - (v - lo) / ((hi - lo) || 1) * ph;
+      ctx.save(); ctx.beginPath(); ctx.rect(x + 1, y + T, cw - 2, ph); ctx.clip();
+      if (lo < 0 && hi > 0) { ctx.strokeStyle = C.grid; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + px, Math.round(fy(0)) + .5); ctx.lineTo(x + px + pw, Math.round(fy(0)) + .5); ctx.stroke(); }
+      ctx.strokeStyle = C.axis; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(fx(0), y + T); ctx.lineTo(fx(0), y + T + ph); ctx.stroke(); ctx.setLineDash([]);
+      ctx.strokeStyle = C["ink-2"]; ctx.lineWidth = 1; ctx.globalAlpha = Math.max(.05, Math.min(.4, 5 / Math.max(1, d.waves.length)));
+      d.waves.forEach((wv, j) => { ctx.beginPath(); for (let k = 0; k < ns; k++) { const X = fx(k - d.trigs[j]), Y = fy(wv[k]); k ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); } ctx.stroke(); });
+      ctx.globalAlpha = 1;
+      if (d.umeans) for (const a of d.umeans) { ctx.strokeStyle = unitColor(a.u); ctx.lineWidth = 1.5; ctx.beginPath(); for (let k = 0; k < ns; k++) { const X = fx(k - d.trigMed), Y = fy(a.mean[k]); k ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); } ctx.stroke(); }
+      else if (d.waves.length) { ctx.strokeStyle = C.accent; ctx.lineWidth = 1.5; ctx.beginPath(); for (let k = 0; k < ns; k++) { const X = fx(k - d.trigMed), Y = fy(d.mean[k]); k ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); } ctx.stroke(); }
+      else if (cw >= 60) { ctx.fillStyle = C.muted; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("no spikes", x + cw / 2, y + T + ph / 2); }
+      ctx.restore();
+      ctx.font = `10px ${css("--font")}`; ctx.textBaseline = "top";
+      ctx.fillStyle = ch.i === S.sel ? C.ink : C["ink-2"]; ctx.textAlign = "left"; ctx.fillText(`${ch.ec}${ch.er}`, x + 6, y + 4);
+      if (cw >= (shared ? 84 : 110)) { ctx.fillStyle = C.muted; ctx.textAlign = "right"; ctx.fillText(shared ? `n=${fmt(d.n, 0)}` : `${fmt(lo, 0)}…${fmt(hi, 0)} µV`, x + cw - 6, y + 4); }
+      ctx.font = `11px ${css("--font")}`;
+      hit.wg.push({ cv, x, y, w: cw, h: chh, c: ch.i, d });
+    }
+    const span = grid.querySelector(`span[data-w="${w}"]`); if (span) span.textContent = `${fmt(wellSpikes, 0)} spikes in window`;
+  }
+}
+function wgHit(e) { const cv = e.target, r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top; return hit.wg && hit.wg.find(h => h.cv === cv && x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h); }
+
+function drawRate() {
+  const cv = $("fr"), { ctx, W, H } = setup(cv);
+  if (S.sel < 0) return;
+  const span = S.t1 - S.t0, raw = span / 120, mag = 10 ** Math.floor(Math.log10(raw)), e = raw / mag;
+  const bw = (e > 5 ? 10 : e > 2 ? 5 : e > 1 ? 2 : 1) * mag, nb = Math.max(1, Math.ceil(span / bw));
+  const bins = new Float64Array(nb);
+  for (const i of spikesInWindow(S.sel)) { const b = Math.min(nb - 1, Math.floor((F.times[i] - S.t0) / bw)); bins[b]++; }
+  for (let b = 0; b < nb; b++) bins[b] /= Math.min(bw, span - b * bw);
+  const ymax = Math.max(...bins, 1) * 1.08;
+  const fr = frame(ctx, W, H, { x0: S.t0, x1: S.t0 + nb * bw, y0: 0, y1: ymax, xTicks: niceTicks(S.t0, S.t1, 6), yTicks: niceTicks(0, ymax, 4), xFmt: fmtTime, xLabel: "Time", yLabel: "Hz" });
+  ctx.fillStyle = css("--accent");
+  const bpx = fr.pw / nb, g = bpx > 4 ? 1 : 0;
+  for (let b = 0; b < nb; b++) { if (!bins[b]) continue; const x = fr.L + b * bpx, y = fr.fy(bins[b]); ctx.beginPath(); ctx.roundRect(x + g / 2, y, Math.max(1, bpx - g), fr.T + fr.ph - y, bpx > 6 ? [2, 2, 0, 0] : 0); ctx.fill(); }
+  hit.fr = { fr, bins, bw, nb, bpx };
+  $("frSub").textContent = `Bin width ${bw >= 1 ? fmt(bw, 2) + " s" : fmt(bw * 1000, 1) + " ms"} · mean ${fmt(spikesInWindow(S.sel).length / span, 2)} Hz in window`;
+}
+
+function drawIsi() {
+  const cv = $("isi"), { ctx, W, H } = setup(cv);
+  const idx = S.sel >= 0 ? spikesInWindow(S.sel) : [];
+  if (idx.length < 2) { hit.isi = null; $("isiSub").textContent = ""; return emptyMsg(ctx, W, H, "Need at least 2 spikes"); }
+  const isi = new Float64Array(idx.length - 1); for (let k = 1; k < idx.length; k++) isi[k - 1] = (F.times[idx[k]] - F.times[idx[k - 1]]) * 1000;
+  const lo = Math.log10(0.1), hi = Math.log10(1e5), nb = 60, bins = new Float64Array(nb);
+  let refr = 0; for (const v of isi) { if (v < 2) refr++; const b = Math.floor((Math.log10(Math.max(v, 0.1)) - lo) / (hi - lo) * nb); bins[Math.min(nb - 1, Math.max(0, b))]++; }
+  const ymax = Math.max(...bins) * 1.08 || 1;
+  const fr = frame(ctx, W, H, { x0: 0.1, x1: 1e5, y0: 0, y1: ymax, logX: true, xTicks: [0.1, 1, 10, 100, 1000, 1e4, 1e5], yTicks: niceTicks(0, ymax, 4), xFmt: v => v >= 1000 ? fmt(v / 1000) + " s" : fmt(v) + " ms", xLabel: "Inter-spike interval (log scale)", yLabel: "count" });
+  ctx.fillStyle = css("--accent"); const bpx = fr.pw / nb;
+  for (let b = 0; b < nb; b++) { if (!bins[b]) continue; const x = fr.L + b * bpx, y = fr.fy(bins[b]); ctx.beginPath(); ctx.roundRect(x + 1, y, bpx - 2, fr.T + fr.ph - y, [2, 2, 0, 0]); ctx.fill(); }
+  const med = Array.from(isi).sort((a, b) => a - b)[Math.floor(isi.length / 2)];
+  hit.isi = { fr, bins, lo, hi, nb, bpx };
+  $("isiSub").textContent = `${fmt(isi.length, 0)} intervals · median ${med >= 1000 ? fmt(med / 1000, 2) + " s" : fmt(med, 1) + " ms"} · ${fmt(100 * refr / isi.length, 2)}% < 2 ms`;
+}
+
+function drawAmp() {
+  const cv = $("amp"), { ctx, W, H } = setup(cv);
+  const idx = S.sel >= 0 ? spikesInWindow(S.sel) : [];
+  if (!idx.length) { hit.amp = null; $("ampSub").textContent = ""; return emptyMsg(ctx, W, H, "No spikes in this window"); }
+  let a = Array.from(idx, i => F.amp[i]).sort((x, y) => x - y), y0 = Math.min(0, a[Math.floor(a.length * .002)]), y1 = Math.max(0, a[Math.ceil(a.length * .998) - 1]);
+  const pad = (y1 - y0) * .08; y0 -= pad; y1 += pad;
+  const fr = frame(ctx, W, H, { x0: S.t0, x1: S.t1, y0, y1, xTicks: niceTicks(S.t0, S.t1, 6), yTicks: niceTicks(y0, y1, 4), xFmt: fmtTime, xLabel: "Time", yLabel: "µV" });
+  ctx.fillStyle = css("--accent"); ctx.globalAlpha = Math.max(.15, Math.min(.8, 300 / idx.length));
+  const r = idx.length > 3000 ? 1.2 : 2;
+  for (const i of idx) { ctx.beginPath(); ctx.arc(fr.fx(F.times[i]), fr.fy(F.amp[i]), r, 0, 7); ctx.fill(); }
+  ctx.globalAlpha = 1;
+  hit.amp = { fr, idx };
+  $("ampSub").textContent = `Voltage at the trigger sample · median ${fmt(a[Math.floor(a.length / 2)], 1)} µV`;
+}
+
+function drawTable() {
+  const cols = [["label", "Electrode"], ["well", "Well"], ["n", "Spikes", 1], ["rate", "Rate (Hz)", 1], ["amp", "Median amp. (µV)", 1], ["units", "Units", 1], ["treat", "Treatment"]];
+  const rows = F.rows.filter(c => !$("tblActive").checked || F.counts[c] > 0 || c === S.sel).map(c => { const ch = F.channels[c], idx = F.perCh[c]; const am = Array.from(idx, i => F.amp[i]).sort((a, b) => a - b); const w = F.wells[ch.well];
+    return { c, label: ch.label, well: ch.well, n: idx.length, rate: F.rate[c], amp: am.length ? am[am.length >> 1] : NaN, units: F.sorting.has(c) ? F.sorting.get(c).units.length : -1, treat: w && w.what ? w.what : "", wsort: ch.wr * 1000 + ch.wc * 10 + ch.er * 0.1 + ch.ec * 0.01 }; });
+  const { key, dir } = S.sort;
+  rows.sort((a, b) => { const A = key === "well" || key === "label" ? a.wsort : a[key], B = key === "well" || key === "label" ? b.wsort : b[key]; return (A > B ? 1 : A < B ? -1 : 0) * dir; });
+  $("elTable").tHead.innerHTML = "<tr>" + cols.map(([k, t, n]) => `<th class="${n ? "n" : ""}" data-k="${k}">${t}${key === k ? (dir > 0 ? " ▲" : " ▼") : ""}</th>`).join("") + "</tr>";
+  $("elTable").tBodies[0].innerHTML = rows.map(r => `<tr data-c="${r.c}" class="${r.c === S.sel ? "sel" : ""}"><td>${r.label}</td><td>${r.well}</td><td class="n">${fmt(r.n, 0)}</td><td class="n">${fmt(r.rate, 3)}</td><td class="n">${fmt(r.amp, 1)}</td><td class="n">${r.units < 0 ? "–" : r.units}</td><td>${esc(r.treat)}</td></tr>`).join("");
+}
+
+function drawInfo() {
+  const h = F.header, d = x => x ? x.toLocaleString() : "–";
+  const blocks = [["File", [["Name", F.name], ["Size", fmt(F.size / 1048576, 1) + " MB"], ["Header version", F.version], ["Data set", `${h.Name} / ${h.DataSetName || ""} (${DATA_TYPES[h.DataType]})`],
+    ["Experiment start", d(h.ExperimentStartTime)], ["Block-vector start", d(h.BlockVectorStartTime)], ["Added", d(h.AddedDate)], ["Modified", d(h.ModifiedDate)],
+    ["Duration", fmt(h.Duration, 3) + " s"], ["Voltage scale", h.VoltageScale.toExponential(6) + " V/sample"], ["Samples per spike", h.NumSamplesPerBlock], ["Block header size", h.BlockHeaderSize + " bytes"]]],
+    ["Metadata", Object.entries(F.meta)]];
+  for (const s of F.settings) blocks.push([s.title, s.rows]);
+  if (F.warnings.length) blocks.push(["Warnings", F.warnings.map(w => ["", w])]);
+  $("info").innerHTML = blocks.filter(b => b[1].length).map(([t, rows]) => `<div><h4>${esc(t)}</h4><table>${rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("")}</table></div>`).join("");
+}
+
+function updateSelection() {
+  if (S.sel >= 0) {
+    const ch = F.channels[S.sel], w = F.wells[ch.well];
+    $("selName").textContent = ch.label;
+    $("selStats").textContent = `· ${fmt(F.counts[S.sel], 0)} spikes total · ${fmt(F.rate[S.sel], 3)} Hz${w && w.what ? " · " + w.what : ""}`;
+  }
+  drawPlate(); drawRaster(); drawWaveforms(); drawRate(); drawIsi(); drawAmp(); drawTable(); drawWaveGrid(); drawSort(); drawSpikeBrowser();
+}
+function drawAll() { if (!F) return; readColors(); hit.plateKey = null; drawTiles(); updateSelection(); drawInfo(); drawTimeline(); renderReplay(); }
+function select(c) { if (c === undefined || c < 0) return; if (c !== S.sel) { SS.checked.clear(); SS.hl = 0; stopSpin(); sbReset(); } S.sel = c; updateSelection(); }
+function setWindow(a, b) { S.t0 = Math.max(0, a); S.t1 = Math.min(F.duration, b); if (S.t1 - S.t0 < 1e-3) S.t1 = S.t0 + 1e-3; drawRaster(); drawWaveforms(); drawRate(); drawIsi(); drawAmp(); drawWaveGrid(); drawTimeline(); drawTrace(); }
+
+/* =====================================================================
+ * Spike sorting: a port of the SAMS automatic pipeline
+ * (Ren et al. 2025, bioRxiv doi:10.1101/2025.02.08.637245; src/process_electrode.m)
+ * Each electrode is sorted on its own:
+ *  1. PCA of the waveforms
+ *  2. initial clusters on PC1-PC2: k-means (k-means++ seeding, best of 3 runs) for
+ *     K = 2...maxK, K picked by the Davies-Bouldin index
+ *     [SAMS uses spectral clustering here; k-means keeps it fast in a browser]
+ *  3. outliers removed per cluster: waveform RMSE more than sdCut SD from the cluster mean RMSE
+ *  4. under-sorting fix: Hartigan's dip test on PC1 and PC2 of every cluster; when either
+ *     is multimodal (p < 0.05) the cluster is clustered again (K = 2...maxK, Davies-Bouldin).
+ *     Clusters of 10 spikes or fewer are dropped.
+ *  5. template merge: clusters whose min-max normalised mean waveforms are closer than
+ *     mergeThr by dynamic time warping, and whose peaks and troughs lie within
+ *     (1 - overlap) x height of each other, are merged (repeated until nothing changes)
+ *  6. final clean-up per unit: iterative RMSE outlier removal, the second spike of every
+ *     pair closer than the refractory period removed, units slower than minRate dropped
+ * Spikes removed along the way are "unsorted" (unit 0).
+ * ===================================================================== */
+const SORT_DEFAULTS = { mergeThr: 1.5, overlap: 0.7, refractoryMs: 1.5, sdCut: 3, minRate: 0.1, maxK: 5 };
+
+function mulberry(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+
+// symmetric eigen-decomposition (cyclic Jacobi); eigenvalues descending, vecs[k] = k-th eigenvector
+function eigSym(A, n) {
+  const a = Float64Array.from(A), v = new Float64Array(n * n);
+  for (let i = 0; i < n; i++) v[i * n + i] = 1;
+  let scale = 0; for (const x of a) scale += x * x;
+  for (let sweep = 0; sweep < 50; sweep++) {
+    let off = 0; for (let p = 0; p < n; p++) for (let q = p + 1; q < n; q++) off += a[p * n + q] ** 2;
+    if (off <= 1e-26 * scale) break;
+    for (let p = 0; p < n; p++) for (let q = p + 1; q < n; q++) {
+      const apq = a[p * n + q]; if (Math.abs(apq) < 1e-300) continue;
+      const theta = (a[q * n + q] - a[p * n + p]) / (2 * apq);
+      const t = (theta >= 0 ? 1 : -1) / (Math.abs(theta) + Math.sqrt(theta * theta + 1)), c = 1 / Math.sqrt(t * t + 1), s = t * c;
+      for (let k = 0; k < n; k++) { const kp = a[k * n + p], kq = a[k * n + q]; a[k * n + p] = c * kp - s * kq; a[k * n + q] = s * kp + c * kq; }
+      for (let k = 0; k < n; k++) { const pk = a[p * n + k], qk = a[q * n + k]; a[p * n + k] = c * pk - s * qk; a[q * n + k] = s * pk + c * qk; }
+      for (let k = 0; k < n; k++) { const kp = v[k * n + p], kq = v[k * n + q]; v[k * n + p] = c * kp - s * kq; v[k * n + q] = s * kp + c * kq; }
+    }
+  }
+  const order = [...Array(n).keys()].sort((i, j) => a[j * n + j] - a[i * n + i]);
+  return { vals: order.map(i => a[i * n + i]), vecs: order.map(k => Float64Array.from({ length: n }, (_, i) => v[i * n + k])) };
+}
+
+// PCA scores (n x nc, row-major) of the rows of X (n x d)
+function pcaScores(X, n, d, nc) {
+  const mu = new Float64Array(d);
+  for (let i = 0; i < n; i++) for (let k = 0; k < d; k++) mu[k] += X[i * d + k];
+  for (let k = 0; k < d; k++) mu[k] /= n;
+  const cov = new Float64Array(d * d), r = new Float64Array(d);
+  for (let i = 0; i < n; i++) {
+    for (let k = 0; k < d; k++) r[k] = X[i * d + k] - mu[k];
+    for (let a = 0; a < d; a++) { const ra = r[a]; for (let b = a; b < d; b++) cov[a * d + b] += ra * r[b]; }
+  }
+  for (let a = 0; a < d; a++) for (let b = a; b < d; b++) { cov[a * d + b] /= Math.max(1, n - 1); cov[b * d + a] = cov[a * d + b]; }
+  const { vals, vecs } = eigSym(cov, d), tot = vals.reduce((s, v) => s + Math.max(v, 0), 0) || 1;
+  for (const v of vecs.slice(0, nc)) { let m = 0; for (let k = 1; k < d; k++) if (Math.abs(v[k]) > Math.abs(v[m])) m = k; if (v[m] < 0) for (let k = 0; k < d; k++) v[k] = -v[k]; }
+  const S = new Float64Array(n * nc);
+  for (let i = 0; i < n; i++) for (let c = 0; c < nc; c++) { const v = vecs[c]; let s = 0; for (let k = 0; k < d; k++) s += (X[i * d + k] - mu[k]) * v[k]; S[i * nc + c] = s; }
+  return { scores: S, explained: vals.slice(0, nc).map(v => Math.max(v, 0) / tot) };
+}
+
+// k-means (k-means++ seeding, best of `reps` runs by within-cluster sum of squares)
+function kmeans(P, n, dim, K, rnd, reps = 3, maxIt = 100) {
+  const d2 = (i, C, k) => { let s = 0; for (let e = 0; e < dim; e++) { const z = P[i * dim + e] - C[k * dim + e]; s += z * z; } return s; };
+  let best = null;
+  for (let rep = 0; rep < reps; rep++) {
+    const C = new Float64Array(K * dim), D = new Float64Array(n).fill(Infinity);
+    let f = Math.floor(rnd() * n); for (let e = 0; e < dim; e++) C[e] = P[f * dim + e];
+    for (let k = 1; k < K; k++) {
+      let tot = 0; for (let i = 0; i < n; i++) { const z = d2(i, C, k - 1); if (z < D[i]) D[i] = z; tot += D[i]; }
+      let r = rnd() * tot, i = 0; for (; i < n - 1; i++) { r -= D[i]; if (r <= 0) break; }
+      for (let e = 0; e < dim; e++) C[k * dim + e] = P[i * dim + e];
+    }
+    const lab = new Int32Array(n), cnt = new Int32Array(K); let sse = 0;
+    for (let it = 0; it < maxIt; it++) {
+      let changed = 0; sse = 0;
+      for (let i = 0; i < n; i++) {
+        let bk = 0, bd = Infinity; for (let k = 0; k < K; k++) { const z = d2(i, C, k); if (z < bd) { bd = z; bk = k; } }
+        if (lab[i] !== bk || it === 0) changed++; lab[i] = bk; sse += bd;
+      }
+      if (!changed) break;
+      C.fill(0); cnt.fill(0);
+      for (let i = 0; i < n; i++) { cnt[lab[i]]++; for (let e = 0; e < dim; e++) C[lab[i] * dim + e] += P[i * dim + e]; }
+      for (let k = 0; k < K; k++) {
+        if (cnt[k]) for (let e = 0; e < dim; e++) C[k * dim + e] /= cnt[k];
+        else { const j = Math.floor(rnd() * n); for (let e = 0; e < dim; e++) C[k * dim + e] = P[j * dim + e]; } // re-seed an empty cluster
+      }
+    }
+    if (!best || sse < best.sse) best = { lab, C, sse };
+  }
+  return best;
+}
+
+// Davies-Bouldin index (lower = better separated)
+function daviesBouldin(P, n, dim, lab, C, K) {
+  const s = new Float64Array(K), cnt = new Int32Array(K);
+  for (let i = 0; i < n; i++) { let z = 0; for (let e = 0; e < dim; e++) z += (P[i * dim + e] - C[lab[i] * dim + e]) ** 2; s[lab[i]] += Math.sqrt(z); cnt[lab[i]]++; }
+  for (let k = 0; k < K; k++) { if (!cnt[k]) return Infinity; s[k] /= cnt[k]; }
+  let db = 0;
+  for (let i = 0; i < K; i++) {
+    let m = 0;
+    for (let j = 0; j < K; j++) { if (j === i) continue; let z = 0; for (let e = 0; e < dim; e++) z += (C[i * dim + e] - C[j * dim + e]) ** 2; m = Math.max(m, (s[i] + s[j]) / (Math.sqrt(z) || 1e-12)); }
+    db += m;
+  }
+  return db / K;
+}
+
+function clusterBest(P, n, dim, kmin, kmax, rnd) {
+  let best = null;
+  for (let K = kmin; K <= Math.min(kmax, n - 1); K++) {
+    const km = kmeans(P, n, dim, K, rnd), db = daviesBouldin(P, n, dim, km.lab, km.C, K);
+    if (!best || db < best.db) best = { lab: km.lab, K, db };
+  }
+  return best || { lab: new Int32Array(n), K: 1, db: NaN };
+}
+
+// Hartigan's dip statistic of a sorted sample (port of AS 217, as in SAMS' HartigansDipTest.m)
+function dipStat(xs) {
+  const N = xs.length; if (N < 4 || !(xs[N - 1] > xs[0])) return 0;
+  const x = new Float64Array(N + 1); for (let i = 0; i < N; i++) x[i + 1] = xs[i];
+  // unimodal-by-construction shortcut (ifault 5 in the original)
+  let minNeg = Infinity; const sg = new Int8Array(N);
+  for (let i = 1; i <= N - 2; i++) { const dd = x[i + 2] - 2 * x[i + 1] + x[i]; sg[i] = dd > 0 ? -1 : dd < 0 ? 1 : 0; if (sg[i] < 0 && i < minNeg) minNeg = i; }
+  let posAfter = false, anyPos = false; for (let i = 1; i <= N - 2; i++) if (sg[i] > 0) { anyPos = true; if (i > minNeg) posAfter = true; }
+  if (!anyPos || minNeg === Infinity || !posAfter) return 0;
+  const mn = new Int32Array(N + 1), mj = new Int32Array(N + 1), gcm = new Int32Array(N + 2), lcm = new Int32Array(N + 2), fn = N;
+  let low = 1, high = N, dip = 1 / fn;
+  mn[1] = 1;
+  for (let j = 2; j <= N; j++) {
+    mn[j] = j - 1; let mnj = mn[j], mnmnj = mn[mnj], a = mnj - mnmnj, b = j - mnj;
+    while (!(mnj === 1 || (x[j] - x[mnj]) * a < (x[mnj] - x[mnmnj]) * b)) { mn[j] = mnmnj; mnj = mn[j]; mnmnj = mn[mnj]; a = mnj - mnmnj; b = j - mnj; }
+  }
+  mj[N] = N;
+  for (let jk = 1; jk <= N - 1; jk++) {
+    const k = N - jk; mj[k] = k + 1; let mjk = mj[k], mjmjk = mj[mjk], a = mjk - mjmjk, b = k - mjk;
+    while (!(mjk === N || (x[k] - x[mjk]) * a < (x[mjk] - x[mjmjk]) * b)) { mj[k] = mjmjk; mjk = mj[k]; mjmjk = mj[mjk]; a = mjk - mjmjk; b = k - mjk; }
+  }
+  for (let guard = 0; guard < 4 * N; guard++) {
+    let ic = 1; gcm[1] = high; let igcm1 = gcm[ic]; ic++; gcm[ic] = mn[igcm1];
+    while (gcm[ic] > low) { igcm1 = gcm[ic]; ic++; gcm[ic] = mn[igcm1]; }
+    const icx = ic;
+    ic = 1; lcm[1] = low; let lcm1 = lcm[ic]; ic++; lcm[ic] = mj[lcm1];
+    while (lcm[ic] < high) { lcm1 = lcm[ic]; ic++; lcm[ic] = mj[lcm1]; }
+    const icv = ic;
+    let ig = icx, ih = icv, ix = icx - 1, iv = 2, d = 0;
+    if (icx === 2 && icv === 2) d = 1 / fn;
+    else {
+      for (let g2 = 0; g2 < 4 * N; g2++) {
+        const igcmx = gcm[ix], lcmiv = lcm[iv];
+        if (!(igcmx > lcmiv)) {
+          const lcmiv1 = lcm[iv - 1], a = lcmiv - lcmiv1, b = igcmx - lcmiv1 - 1;
+          const dx = (x[igcmx] - x[lcmiv1]) * a / (fn * (x[lcmiv] - x[lcmiv1])) - b / fn;
+          ix--;
+          if (!(dx < d)) { d = dx; ig = ix + 1; ih = iv; }
+        } else {
+          const igcm = gcm[ix], ig1 = gcm[ix + 1], a = lcmiv - ig1 + 1, b = igcm - ig1;
+          const dx = a / fn - ((x[lcmiv] - x[ig1]) * b) / (fn * (x[igcm] - x[ig1]));
+          iv++;
+          if (!(dx < d)) { d = dx; ig = ix + 1; ih = iv - 1; }
+        }
+        if (ix < 1) ix = 1; if (iv > icv) iv = icv;
+        if (gcm[ix] === lcm[iv]) break;
+      }
+    }
+    if (d < dip) break;
+    let dl = 0;
+    if (ig !== icx) for (let j = ig; j <= icx - 1; j++) {
+      let temp = 1 / fn; const jb = gcm[j + 1], je = gcm[j];
+      if (je - jb > 1 && x[je] !== x[jb]) { const cst = (je - jb) / (fn * (x[je] - x[jb])); for (let jr = jb; jr <= je; jr++) { const t = (jr - jb + 1) / fn - (x[jr] - x[jb]) * cst; if (t > temp) temp = t; } }
+      if (dl < temp) dl = temp;
+    }
+    let du = 0;
+    if (ih !== icv) for (let k = ih; k <= icv - 1; k++) {
+      let temp = 1 / fn; const kb = lcm[k], ke = lcm[k + 1];
+      if (ke - kb > 1 && x[ke] !== x[kb]) { const cst = (ke - kb) / (fn * (x[ke] - x[kb])); for (let kr = kb; kr <= ke; kr++) { const t = (x[kr] - x[kb]) * cst - (kr - kb - 1) / fn; if (t > temp) temp = t; } }
+      if (du < temp) du = temp;
+    }
+    dip = Math.max(dip, dl, du);
+    low = gcm[ig]; high = lcm[ih];
+  }
+  return 0.5 * dip;
+}
+
+// dip test p-value against a uniform null (bootstrap, cached per sample size).
+// Large clusters are tested on a random subsample of `cap` spikes to keep it fast.
+const dipNull = new Map();
+function dipTest(vals, rnd, nboot = 200, cap = 2000) {
+  let v = Float64Array.from(vals);
+  if (v.length > cap) { for (let i = 0; i < cap; i++) { const j = i + Math.floor(rnd() * (v.length - i)); const t = v[i]; v[i] = v[j]; v[j] = t; } v = v.slice(0, cap); }
+  v.sort(); const n = v.length, dip = dipStat(v);
+  let nul = dipNull.get(n);
+  if (!nul) { const r = mulberry(n * 7919), u = new Float64Array(n); nul = new Float64Array(nboot); for (let b = 0; b < nboot; b++) { for (let i = 0; i < n; i++) u[i] = r(); u.sort(); nul[b] = dipStat(u); } dipNull.set(n, nul); }
+  let c = 0; for (const z of nul) if (z >= dip) c++;
+  return { dip, p: c / nboot };
+}
+
+// spikes (local indices g) whose waveform RMSE to the cluster mean is more than sdCut SD from the mean RMSE
+function rmseOutliers(W, ns, g, sdCut) {
+  const m = g.length; if (m < 3) return { keep: g, out: 0 };
+  const mean = new Float64Array(ns); for (const j of g) for (let k = 0; k < ns; k++) mean[k] += W[j * ns + k] / m;
+  const r = new Float64Array(m); let mu = 0;
+  g.forEach((j, q) => { let s = 0; for (let k = 0; k < ns; k++) s += (W[j * ns + k] - mean[k]) ** 2; r[q] = Math.sqrt(s / ns); mu += r[q] / m; });
+  let sd = 0; for (const x of r) sd += (x - mu) ** 2; sd = Math.sqrt(sd / (m - 1));
+  const keep = g.filter((_, q) => Math.abs(r[q] - mu) <= sdCut * sd);
+  return { keep, out: m - keep.length };
+}
+function meanWave(W, ns, g) { const m = new Float64Array(ns); for (const j of g) for (let k = 0; k < ns; k++) m[k] += W[j * ns + k] / g.length; return m; }
+
+// dynamic time warping distance (sum of |a-b| along the optimal path, as MATLAB dtw)
+function dtw(a, b) {
+  const m = b.length; let prev = new Float64Array(m + 1).fill(Infinity), cur = new Float64Array(m + 1); prev[0] = 0;
+  for (let i = 1; i <= a.length; i++) {
+    cur[0] = Infinity;
+    for (let j = 1; j <= m; j++) cur[j] = Math.abs(a[i - 1] - b[j - 1]) + Math.min(prev[j], cur[j - 1], prev[j - 1]);
+    [prev, cur] = [cur, prev];
+  }
+  return prev[m];
+}
+
+// SAMS template comparison: which templates should merge (connected components)
+function mergePlan(T, prm) {
+  let lo = Infinity, hi = -Infinity; for (const t of T) for (const v of t) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  const N = T.map(t => Array.from(t, v => (v - lo) / ((hi - lo) || 1))), tol = 1 - prm.overlap;
+  const parent = T.map((_, i) => i), root = i => parent[i] === i ? i : (parent[i] = root(parent[i]));
+  let closeNotMerged = false; const dist = [];
+  for (let i = 0; i < T.length; i++) for (let j = i + 1; j < T.length; j++) {
+    const d = dtw(N[i], N[j]); dist.push([i, j, d]);
+    const pk1 = Math.max(...N[i]), tr1 = Math.min(...N[i]), pk2 = Math.max(...N[j]), tr2 = Math.min(...N[j]), h1 = pk1 - tr1;
+    const same = Math.abs(pk1 - pk2) < h1 * tol && Math.abs(tr1 - tr2) < h1 * tol;
+    if (d < prm.mergeThr && same) parent[root(j)] = root(i);
+    else if (d < prm.mergeThr) closeNotMerged = true;
+  }
+  const comps = new Map(); T.forEach((_, i) => { const r = root(i); if (!comps.has(r)) comps.set(r, []); comps.get(r).push(i); });
+  return { groups: [...comps.values()], closeNotMerged, dist };
+}
+
+function readParams() {
+  const num = (id, def, lo, hi) => { const v = parseFloat($(id).value); return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : def; };
+  return { mergeThr: num("pMerge", 1.5, 0, 100), overlap: num("pOverlap", 0.7, 0, 1), refractoryMs: num("pRefr", 1.5, 0, 100),
+    sdCut: num("pSd", 3, 1, 20), minRate: num("pRate", 0.1, 0, 1000), maxK: Math.round(num("pK", 5, 2, 8)) };
+}
+
+function sortElectrode(c, prm) {
+  const t0 = performance.now(), idx = F.perCh[c], n = idx.length, ns = F.header.NumSamplesPerBlock, sc = uV();
+  const res = { c, n, prm: { ...prm }, labels: new Int16Array(n), units: [], flags: { hdt: 0, merged: 0, inactive: 0, mua: false }, ms: 0 };
+  const minN = Math.max(20, Math.ceil(F.duration * prm.minRate));
+  if (n < minN) { res.skipped = `${fmt(n, 0)} spike${n === 1 ? "" : "s"}; at least ${minN} needed`; return res; }
+  const W = new Float32Array(n * ns);
+  for (let j = 0; j < n; j++) { const o = F.waveOffset(idx[j]); for (let k = 0; k < ns; k++) W[j * ns + k] = F.dv.getInt16(o + 2 * k, true) * sc; }
+  const { scores, explained } = pcaScores(W, n, ns, 3);
+  res.pcs = Float32Array.from(scores); res.explained = explained;
+  const rnd = mulberry(0x5A15 + c);
+  const split = g => {
+    const P = new Float64Array(g.length * 2); g.forEach((j, q) => { P[2 * q] = scores[3 * j]; P[2 * q + 1] = scores[3 * j + 1]; });
+    const { lab, K } = clusterBest(P, g.length, 2, 2, prm.maxK, rnd), out = Array.from({ length: K }, () => []);
+    g.forEach((j, q) => out[lab[q]].push(j)); return out.filter(a => a.length);
+  };
+  // 1-2. initial clusters
+  let groups = split(Array.from({ length: n }, (_, j) => j));
+  res.initialK = groups.length;
+  // 3. outliers
+  groups = groups.map(g => rmseOutliers(W, ns, g, prm.sdCut).keep);
+  // 4. under-sorting fix (Hartigan's dip test)
+  const next = [];
+  for (const g of groups) {
+    if (g.length <= 10) continue;
+    const p1 = dipTest(g.map(j => scores[3 * j]), rnd).p, p2 = dipTest(g.map(j => scores[3 * j + 1]), rnd).p;
+    if (Math.min(p1, p2) < 0.05) { const sub = split(g); if (sub.length > 1) { res.flags.hdt++; next.push(...sub); continue; } }
+    next.push(g);
+  }
+  groups = next;
+  // 5. template merge (DTW), until stable
+  for (let pass = 0; pass < 10 && groups.length > 1; pass++) {
+    const plan = mergePlan(groups.map(g => meanWave(W, ns, g)), prm);
+    if (plan.groups.length === groups.length) break;
+    res.flags.merged += groups.length - plan.groups.length;
+    groups = plan.groups.map(comp => comp.flatMap(i => groups[i]));
+  }
+  // 6. final clean-up
+  const refr = prm.refractoryMs / 1000, units = [];
+  for (let g of groups) {
+    g = g.slice().sort((a, b) => a - b);
+    for (let it = 0; it < ns && g.length; it++) { const r = rmseOutliers(W, ns, g, prm.sdCut); if (!r.out) break; g = r.keep; }
+    let viol = 0;
+    if (g.length > 1) { const drop = new Uint8Array(g.length); for (let q = 1; q < g.length; q++) if (F.times[idx[g[q]]] - F.times[idx[g[q - 1]]] < refr) { drop[q] = 1; viol++; } g = g.filter((_, q) => !drop[q]); }
+    if (!g.length || g.length / F.duration <= prm.minRate) { res.flags.inactive++; continue; }
+    units.push({ g, viol });
+  }
+  units.sort((a, b) => b.g.length - a.g.length);
+  res.units = units.map(u => unitStats(c, u.g, u.viol));
+  relabel(res);
+  if (res.units.length > 1) res.flags.mua = mergePlan(res.units.map(u => u.mean), prm).closeNotMerged;
+  res.ms = performance.now() - t0;
+  return res;
+}
+
+// statistics of one unit (g = indices into F.perCh[c], time-ordered)
+function unitStats(c, g, viol = 0) {
+  const idx = F.perCh[c], ns = F.header.NumSamplesPerBlock, sc = uV(), m = g.length;
+  const mean = new Float64Array(ns), m2 = new Float64Array(ns); let noise = 0;
+  for (const j of g) { const o = F.waveOffset(idx[j]); for (let k = 0; k < ns; k++) { const v = F.dv.getInt16(o + 2 * k, true) * sc; mean[k] += v; m2[k] += v * v; } noise += F.sd[idx[j]] * 1e6; }
+  for (let k = 0; k < ns; k++) { mean[k] /= m; m2[k] = Math.sqrt(Math.max(0, m2[k] / m - mean[k] ** 2)); }
+  let mx = -Infinity, mn = Infinity; for (const v of mean) { mx = Math.max(mx, v); mn = Math.min(mn, v); }
+  let s1 = 0, s2 = 0, minIsi = Infinity;
+  for (let q = 1; q < m; q++) { const d = F.times[idx[g[q]]] - F.times[idx[g[q - 1]]]; s1 += d; s2 += d * d; if (d < minIsi) minIsi = d; }
+  const k = m - 1, mi = k ? s1 / k : NaN, cv = k > 1 ? Math.sqrt(Math.max(0, (s2 - k * mi * mi) / (k - 1))) / mi : NaN;
+  noise /= m;
+  return { g: Int32Array.from(g), n: m, rate: m / F.duration, mean, sd: m2, ptp: mx - mn, peak: Math.abs(mx) > Math.abs(mn) ? mx : mn, noise, snr: (mx - mn) / noise, cv, minIsi, viol };
+}
+function relabel(res) {
+  res.labels.fill(0); res.units.forEach((u, k) => { for (const j of u.g) res.labels[j] = k + 1; });
+  const idx = F.perCh[res.c]; for (let j = 0; j < res.n; j++) F.unitOf[idx[j]] = res.labels[j];
+}
+function storeSort(res) { F.sorting.set(res.c, res); if (!res.units.length) relabel(res); }
+
+/* ---------- curation ---------- */
+function mergeUnits(c, list) {
+  const res = F.sorting.get(c); if (!res || list.length < 2) return;
+  const pick = res.units.filter((_, k) => list.includes(k + 1)), rest = res.units.filter((_, k) => !list.includes(k + 1));
+  const g = Int32Array.from(pick.flatMap(u => Array.from(u.g))).sort();
+  rest.push(unitStats(c, g, pick.reduce((s, u) => s + u.viol, 0)));
+  res.units = rest.sort((a, b) => b.n - a.n); res.curated = true; relabel(res);
+}
+function discardUnits(c, list) {
+  const res = F.sorting.get(c); if (!res) return;
+  res.units = res.units.filter((_, k) => !list.includes(k + 1)); res.curated = true; relabel(res);
+}
+
+/* ---------- sorting views ---------- */
+const SS = { pair: [0, 1], checked: new Set(), hl: 0, running: false, cancel: false, rot: { yaw: -0.6, pitch: 0.35 }, spin: false, spinRaf: 0 };
+function unitColor(u) { return u > 0 && u <= 8 ? C.cat[u - 1] : u > 8 ? C["ink-2"] : C.muted; }
+function totalUnits() { let t = 0; for (const r of F.sorting.values()) t += r.units.length; return t; }
+
+function drawSort() {
+  const res = S.sel >= 0 ? F.sorting.get(S.sel) : null, sorted = F.sorting.size;
+  $("sortStatus").textContent = SS.running ? $("sortStatus").textContent : sorted ? `${sorted} of ${F.rows.filter(c => F.counts[c] > 0).length} electrodes with spikes sorted · ${totalUnits()} units` : "";
+  $("sortClearBtn").disabled = !sorted || SS.running; $("unitCsvBtn").disabled = !sorted || SS.running; $("sortSelBtn").disabled = SS.running || S.sel < 0;
+  const lab = S.sel >= 0 ? F.channels[S.sel].label : "";
+  let sub;
+  if (!res) sub = S.sel >= 0 ? `${lab} is not sorted yet. Use “Sort selected electrode” or “Sort all electrodes”.` : "";
+  else if (res.skipped) sub = `${lab}: too few spikes to sort (${res.skipped}).`;
+  else {
+    const kept = res.units.reduce((s, u) => s + u.n, 0), un = res.n - kept, f = res.flags;
+    const steps = [`${res.initialK} initial clusters`];
+    if (f.hdt) steps.push(`${f.hdt} split by the dip test`);
+    if (f.merged) steps.push(`${f.merged} merge${f.merged > 1 ? "s" : ""} by template similarity`);
+    if (f.inactive) steps.push(`${f.inactive} dropped below ${fmt(res.prm.minRate, 2)} Hz`);
+    sub = `${lab}: ${fmt(res.n, 0)} spikes → <b>${res.units.length} unit${res.units.length === 1 ? "" : "s"}</b>, ${fmt(un, 0)} unsorted (${fmt(un / res.n * 100, 1)} %) · ${steps.join(", ")}`
+      + (res.curated ? " · edited by hand" : "") + ` · ${fmt(res.ms, 0)} ms`
+      + (f.mua && !res.curated ? ` · <span style="color:var(--critical)">⚠ possible multi-unit: two unit templates are similar but their peaks or troughs differ</span>` : "");
+  }
+  $("sortSub").innerHTML = sub;
+  drawSortPca(res); drawSortPca3(res); drawSortTpl(res); drawUnitTable(res);
+}
+
+function drawSortPca(res) {
+  const cv = $("sortPca"), { ctx, W, H } = setup(cv); hit.pca = null;
+  if (!res || !res.pcs) return emptyMsg(ctx, W, H, res ? "Too few spikes to sort" : "Not sorted yet");
+  const [a, b] = SS.pair, n = res.n, P = res.pcs, step = Math.max(1, n / 6000);
+  const xs = [], ys = []; for (let s = 0; s < n; s += step) { const j = Math.floor(s); xs.push(P[3 * j + a]); ys.push(P[3 * j + b]); }
+  const sx = Float64Array.from(xs).sort(), sy = Float64Array.from(ys).sort();
+  let x0 = pctl(sx, .002), x1 = pctl(sx, .998), y0 = pctl(sy, .002), y1 = pctl(sy, .998); const px = (x1 - x0) * .06 || 1, py = (y1 - y0) * .06 || 1; x0 -= px; x1 += px; y0 -= py; y1 += py;
+  const ex = v => fmt(v * 100, 0);
+  const fr = frame(ctx, W, H, { x0, x1, y0, y1, xTicks: niceTicks(x0, x1, 5), yTicks: niceTicks(y0, y1, 5), xLabel: `PC${a + 1} (${ex(res.explained[a])} % of variance)`, yLabel: `PC${b + 1} (${ex(res.explained[b])} %)` });
+  ctx.save(); ctx.beginPath(); ctx.rect(fr.L, fr.T, fr.pw, fr.ph); ctx.clip();
+  const order = [0, ...res.units.map((_, k) => k + 1)], pts = [], base = Math.max(.25, Math.min(.8, 1500 / Math.min(n, 6000)));
+  for (const u of SS.hl ? [...order.filter(u => u !== SS.hl), SS.hl] : order) {
+    ctx.fillStyle = unitColor(u); ctx.globalAlpha = SS.hl && u !== SS.hl ? .07 : u === 0 ? base * .6 : base;
+    for (let s = 0; s < n; s += step) {
+      const j = Math.floor(s); if (res.labels[j] !== u) continue;
+      const X = fr.fx(P[3 * j + a]), Y = fr.fy(P[3 * j + b]); ctx.fillRect(X - 1.2, Y - 1.2, 2.4, 2.4); pts.push(X, Y, j);
+    }
+  }
+  ctx.restore(); ctx.globalAlpha = 1;
+  hit.pca = { pts, res };
+}
+
+/* ---------- 3D feature space: PC1 x PC2 x PC3, orthographic projection, drag to rotate ---------- */
+const SS_ROT0 = { yaw: -0.6, pitch: 0.35 };
+function pca3Cache(res) { // subsample (<= 6000 spikes) centred and scaled once per sorting result
+  if (res._p3) return res._p3;
+  const n = res.n, P = res.pcs, step = Math.max(1, n / 6000), js = [];
+  for (let s = 0; s < n; s += step) js.push(Math.floor(s));
+  const ctr = [0, 0, 0], half = [0, 0, 0];
+  for (let a = 0; a < 3; a++) { const v = Float64Array.from(js, j => P[3 * j + a]).sort(), lo = pctl(v, .005), hi = pctl(v, .995); ctr[a] = (lo + hi) / 2; half[a] = (hi - lo) / 2 || 1; }
+  const sc = Math.max(...half), xyz = new Float32Array(js.length * 3); // one scale for all axes keeps the true geometry
+  js.forEach((j, q) => { for (let a = 0; a < 3; a++) xyz[3 * q + a] = (P[3 * j + a] - ctr[a]) / sc; });
+  return (res._p3 = { js: Int32Array.from(js), xyz, ext: half.map(h => Math.min(1.15, h / sc * 1.08)) });
+}
+function drawSortPca3(res) {
+  const cv = $("sortPca3"), { ctx, W, H } = setup(cv); hit.pca3 = null;
+  if (!res || !res.pcs) { stopSpin(); return emptyMsg(ctx, W, H, res ? "Too few spikes to sort" : "Not sorted yet"); }
+  const { js, xyz, ext } = pca3Cache(res), { yaw, pitch } = SS.rot;
+  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const s = Math.min(W * .36, H * .42), ox = W / 2, oy = H / 2;
+  // PC1 -> x (right), PC2 -> y (up), PC3 -> z (towards the viewer); yaw about y, then pitch about x
+  const proj = (x, y, z) => { const x1 = x * cy + z * sy, z1 = -x * sy + z * cy; return [ox + s * x1, oy - s * (y * cp - z1 * sp), y * sp + z1 * cp]; };
+  const [ex, ey, ez] = ext, corners = [];
+  for (const a of [-1, 1]) for (const b of [-1, 1]) for (const c of [-1, 1]) corners.push([a, b, c]);
+  ctx.lineWidth = 1; ctx.strokeStyle = C.grid; ctx.beginPath();
+  for (let i = 0; i < 8; i++) for (let j = i + 1; j < 8; j++) {
+    const d = corners[i].reduce((t, v, k) => t + (v !== corners[j][k]), 0); if (d !== 1) continue;
+    const p = proj(corners[i][0] * ex, corners[i][1] * ey, corners[i][2] * ez), q = proj(corners[j][0] * ex, corners[j][1] * ey, corners[j][2] * ez);
+    ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]);
+  }
+  ctx.stroke();
+  // axis triad along the box edges from the (-,-,-) corner, labelled at the far end
+  const o = proj(-ex, -ey, -ez), ends = [[ex, -ey, -ez], [-ex, ey, -ez], [-ex, -ey, ez]], pct = v => fmt(v * 100, 0);
+  ctx.strokeStyle = C.axis; ctx.lineWidth = 1.5; ctx.fillStyle = C["ink-2"]; ctx.font = `11px ${css("--font")}`; ctx.textBaseline = "middle";
+  ends.forEach((e, a) => {
+    const p = proj(...e); ctx.beginPath(); ctx.moveTo(o[0], o[1]); ctx.lineTo(p[0], p[1]); ctx.stroke();
+    const dx = p[0] - o[0], dy = p[1] - o[1], L = Math.hypot(dx, dy) || 1;
+    ctx.textAlign = dx >= 0 ? "left" : "right"; ctx.fillText(`PC${a + 1} (${pct(res.explained[a])} %)`, p[0] + dx / L * 6, p[1] + dy / L * 8);
+  });
+  // points: unsorted first, then units (largest first); highlighted unit drawn last; nearer points slightly larger
+  const m = js.length, sx = new Float32Array(m), syy = new Float32Array(m), sz = new Float32Array(m);
+  for (let q = 0; q < m; q++) { const p = proj(xyz[3 * q], xyz[3 * q + 1], xyz[3 * q + 2]); sx[q] = p[0]; syy[q] = p[1]; sz[q] = p[2]; }
+  ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+  const order = [0, ...res.units.map((_, k) => k + 1)], base = Math.max(.25, Math.min(.8, 1500 / m)), pts = [];
+  for (const u of SS.hl ? [...order.filter(u => u !== SS.hl), SS.hl] : order) {
+    ctx.fillStyle = unitColor(u); ctx.globalAlpha = SS.hl && u !== SS.hl ? .07 : u === 0 ? base * .6 : base;
+    for (let q = 0; q < m; q++) {
+      if (res.labels[js[q]] !== u) continue;
+      const r = Math.max(.8, Math.min(1.8, 1.2 + sz[q] * .35));
+      ctx.fillRect(sx[q] - r, syy[q] - r, 2 * r, 2 * r); pts.push(sx[q], syy[q], js[q]);
+    }
+  }
+  ctx.restore(); ctx.globalAlpha = 1;
+  hit.pca3 = { pts, res };
+}
+function curSort() { return F && S.sel >= 0 ? F.sorting.get(S.sel) : null; }
+function stopSpin() { SS.spin = false; cancelAnimationFrame(SS.spinRaf); const b = $("spinBtn"); if (b) b.textContent = "Spin"; }
+function startSpin() {
+  if (!curSort() || !curSort().pcs) return;
+  SS.spin = true; $("spinBtn").textContent = "Stop"; let last = performance.now();
+  const step = now => { if (!SS.spin) return; SS.rot.yaw += (now - last) / 1000 * .6; last = now; drawSortPca3(curSort()); if (SS.spin) SS.spinRaf = requestAnimationFrame(step); };
+  SS.spinRaf = requestAnimationFrame(step);
+}
+{
+  const cv = $("sortPca3"); let rot = null;
+  cv.addEventListener("pointerdown", e => { if (!hit.pca3 || e.button !== 0) return; stopSpin(); hideTip(); rot = { x: e.clientX, y: e.clientY, yaw: SS.rot.yaw, pitch: SS.rot.pitch }; cv.setPointerCapture(e.pointerId); cv.classList.add("grabbing"); e.preventDefault(); });
+  cv.addEventListener("pointermove", e => { if (!rot) return; SS.rot.yaw = rot.yaw + (e.clientX - rot.x) * .01; SS.rot.pitch = Math.max(-1.55, Math.min(1.55, rot.pitch + (e.clientY - rot.y) * .01)); drawSortPca3(curSort()); });
+  const end = () => { rot = null; cv.classList.remove("grabbing"); };
+  cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end);
+  cv.addEventListener("dblclick", () => { stopSpin(); SS.rot = { ...SS_ROT0 }; drawSortPca3(curSort()); });
+  $("view3Btn").addEventListener("click", () => { stopSpin(); SS.rot = { ...SS_ROT0 }; drawSortPca3(curSort()); });
+  $("spinBtn").addEventListener("click", e => { SS.spin ? stopSpin() : startSpin(); e.currentTarget.blur(); });
+  chartHover("sortPca3", (x, y) => {
+    const h = hit.pca3; if (!h || rot || SS.spin) return null; let best = -1, bd = 49;
+    for (let q = 0; q < h.pts.length; q += 3) { const d = (h.pts[q] - x) ** 2 + (h.pts[q + 1] - y) ** 2; if (d < bd) { bd = d; best = q; } }
+    if (best < 0) return null;
+    const j = h.pts[best + 2], u = h.res.labels[j], i = F.perCh[h.res.c][j], P = h.res.pcs;
+    return `<b>${u ? "Unit " + u : "Unsorted"}</b><br>spike at ${fmtTime(F.times[i])} (${fmt(F.times[i], 4)} s)<br>PC1 ${fmt(P[3 * j], 1)} · PC2 ${fmt(P[3 * j + 1], 1)} · PC3 ${fmt(P[3 * j + 2], 1)}`;
+  });
+}
+
+function drawSortTpl(res) {
+  const cv = $("sortTpl"), { ctx, W, H } = setup(cv); hit.tpl = null;
+  if (!res || !res.units.length) { $("tplLegend").innerHTML = ""; return emptyMsg(ctx, W, H, !res ? "Not sorted yet" : res.skipped ? "Too few spikes to sort" : "No unit passed the quality checks"); }
+  const ns = F.header.NumSamplesPerBlock, idx = F.perCh[res.c], tr = Array.from(idx.subarray(0, 200), i => F.trig[i]).sort((a, b) => a - b)[Math.min(idx.length, 200) >> 1];
+  const ms = k => (k - tr) / F.fs * 1000;
+  let y0 = Infinity, y1 = -Infinity; for (const u of res.units) for (let k = 0; k < ns; k++) { y0 = Math.min(y0, u.mean[k] - u.sd[k]); y1 = Math.max(y1, u.mean[k] + u.sd[k]); }
+  const pad = (y1 - y0) * .06; y0 -= pad; y1 += pad;
+  const fr = frame(ctx, W, H, { x0: ms(0), x1: ms(ns - 1), y0, y1, xTicks: niceTicks(ms(0), ms(ns - 1), 6), yTicks: niceTicks(y0, y1, 5), xLabel: "Time from trigger (ms)", yLabel: "µV" });
+  ctx.save(); ctx.beginPath(); ctx.rect(fr.L, fr.T, fr.pw, fr.ph); ctx.clip();
+  const list = res.units.map((u, k) => [u, k + 1]).reverse(); if (SS.hl) list.sort((p, q) => (p[1] === SS.hl) - (q[1] === SS.hl));
+  for (const [u, k] of list) {
+    const col = unitColor(k), dim = SS.hl && SS.hl !== k;
+    ctx.fillStyle = col; ctx.globalAlpha = dim ? .04 : .14; ctx.beginPath();
+    for (let s = 0; s < ns; s++) { const X = fr.fx(ms(s)), Y = fr.fy(u.mean[s] + u.sd[s]); s ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }
+    for (let s = ns - 1; s >= 0; s--) ctx.lineTo(fr.fx(ms(s)), fr.fy(u.mean[s] - u.sd[s]));
+    ctx.fill();
+    ctx.globalAlpha = dim ? .25 : 1; ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath();
+    for (let s = 0; s < ns; s++) { const X = fr.fx(ms(s)), Y = fr.fy(u.mean[s]); s ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1; ctx.strokeStyle = C.axis; ctx.setLineDash([3, 3]); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(fr.fx(0), fr.T); ctx.lineTo(fr.fx(0), fr.T + fr.ph); ctx.stroke(); ctx.setLineDash([]);
+  ctx.restore();
+  hit.tpl = { fr, ms, ns, res };
+  $("tplLegend").innerHTML = res.units.map((u, k) => `<span><span class="sw" style="background:${unitColor(k + 1)}"></span> Unit ${k + 1}</span>`).join("") + `<span style="color:var(--muted)">line = mean · band = ±1 SD</span>`;
+}
+
+function drawUnitTable(res) {
+  const t = $("unitTable");
+  if (!res || res.skipped) { t.tHead.innerHTML = ""; t.tBodies[0].innerHTML = ""; $("unitBtns").hidden = true; return; }
+  const kept = res.units.reduce((s, u) => s + u.n, 0);
+  t.tHead.innerHTML = `<tr><th></th><th>Unit</th><th class="n">Spikes</th><th class="n">Rate (Hz)</th><th class="n" title="Peak-to-peak amplitude of the mean waveform">p-p (µV)</th><th class="n" title="Peak-to-peak amplitude / mean noise SD reported by the spike detector">SNR</th><th class="n" title="Coefficient of variation of the inter-spike intervals">ISI CV</th><th class="n" title="Spikes removed for falling inside the refractory period">Refr. removed</th></tr>`;
+  t.tBodies[0].innerHTML = res.units.map((u, k) => `<tr data-u="${k + 1}"><td><input type="checkbox" data-u="${k + 1}" ${SS.checked.has(k + 1) ? "checked" : ""} aria-label="Select unit ${k + 1}"></td><td><span class="sw" style="background:${unitColor(k + 1)}"></span> Unit ${k + 1}</td><td class="n">${fmt(u.n, 0)}</td><td class="n">${fmt(u.rate, 3)}</td><td class="n">${fmt(u.ptp, 1)}</td><td class="n">${fmt(u.snr, 1)}</td><td class="n">${fmt(u.cv, 2)}</td><td class="n">${fmt(u.viol, 0)}</td></tr>`).join("")
+    + `<tr data-u="0" class="unsorted"><td></td><td><span class="sw" style="background:${C.muted}"></span> Unsorted</td><td class="n">${fmt(res.n - kept, 0)}</td><td class="n">${fmt((res.n - kept) / F.duration, 3)}</td><td colspan="4"></td></tr>`;
+  $("unitBtns").hidden = !res.units.length;
+  $("mergeBtn").disabled = SS.checked.size < 2; $("noiseBtn").disabled = SS.checked.size < 1;
+}
+
+function afterSortChange() { SB.hidden.clear(); drawTiles(); drawTable(); drawRaster(); drawWaveGrid(); drawSort(); drawSpikeBrowser(); }
+
+async function sortAll() {
+  const FF = F, prm = readParams(), list = F.rows.filter(c => F.counts[c] > 0);
+  SS.running = true; SS.cancel = false; $("sortAllBtn").textContent = "Cancel"; drawSort();
+  const t0 = performance.now();
+  for (let k = 0; k < list.length; k++) {
+    $("sortStatus").textContent = `Sorting ${F.channels[list[k]].label} (${k + 1} of ${list.length})…`;
+    await new Promise(r => setTimeout(r, 0));
+    if (SS.cancel || F !== FF) break;
+    storeSort(sortElectrode(list[k], prm));
+    if (list[k] === S.sel) drawSort();
+  }
+  SS.running = false; $("sortAllBtn").textContent = "Sort all electrodes";
+  if (F !== FF) return;
+  afterSortChange();
+  $("sortStatus").textContent += ` · ${SS.cancel ? "cancelled" : "done"} in ${fmt((performance.now() - t0) / 1000, 1)} s`;
+}
+
+$("sortSelBtn").addEventListener("click", () => { if (!F || S.sel < 0) return; SS.checked.clear(); storeSort(sortElectrode(S.sel, readParams())); afterSortChange(); });
+$("sortAllBtn").addEventListener("click", () => { if (!F) return; if (SS.running) SS.cancel = true; else sortAll(); });
+$("sortClearBtn").addEventListener("click", () => { if (!F) return; F.sorting.clear(); F.unitOf.fill(-1); SS.checked.clear(); SS.hl = 0; afterSortChange(); });
+$("pReset").addEventListener("click", () => { const d = SORT_DEFAULTS; $("pMerge").value = d.mergeThr; $("pOverlap").value = d.overlap; $("pRefr").value = d.refractoryMs; $("pSd").value = d.sdCut; $("pRate").value = d.minRate; $("pK").value = d.maxK; });
+$("pcPair").addEventListener("change", e => { SS.pair = e.target.value.split(",").map(Number); if (F) drawSortPca(F.sorting.get(S.sel)); });
+$("unitTable").addEventListener("change", e => {
+  const u = +e.target.dataset.u; if (!u) return; e.target.checked ? SS.checked.add(u) : SS.checked.delete(u);
+  $("mergeBtn").disabled = SS.checked.size < 2; $("noiseBtn").disabled = SS.checked.size < 1;
+});
+$("unitTable").addEventListener("mouseover", e => { const tr = e.target.closest("tr[data-u]"); const u = tr ? +tr.dataset.u : 0; if (u !== SS.hl) { SS.hl = u; const r = F.sorting.get(S.sel); drawSortPca(r); drawSortPca3(r); drawSortTpl(r); } });
+$("unitTable").addEventListener("mouseleave", () => { if (SS.hl) { SS.hl = 0; const r = F.sorting.get(S.sel); drawSortPca(r); drawSortPca3(r); drawSortTpl(r); } });
+$("mergeBtn").addEventListener("click", () => { mergeUnits(S.sel, [...SS.checked]); SS.checked.clear(); afterSortChange(); });
+$("noiseBtn").addEventListener("click", () => { discardUnits(S.sel, [...SS.checked]); SS.checked.clear(); afterSortChange(); });
+chartHover("sortPca", (x, y) => {
+  const h = hit.pca; if (!h) return null; let best = -1, bd = 64;
+  for (let q = 0; q < h.pts.length; q += 3) { const d = (h.pts[q] - x) ** 2 + (h.pts[q + 1] - y) ** 2; if (d < bd) { bd = d; best = q; } }
+  if (best < 0) return null;
+  const j = h.pts[best + 2], u = h.res.labels[j], i = F.perCh[h.res.c][j];
+  return `<b>${u ? "Unit " + u : "Unsorted"}</b><br>spike at ${fmtTime(F.times[i])} (${fmt(F.times[i], 4)} s)`;
+});
+chartHover("sortTpl", x => {
+  const h = hit.tpl; if (!h || x < h.fr.L || x > h.fr.L + h.fr.pw) return null;
+  let s = 0, bd = 1e9; for (let k = 0; k < h.ns; k++) { const d = Math.abs(h.fr.fx(h.ms(k)) - x); if (d < bd) { bd = d; s = k; } }
+  return `<b>${fmt(h.ms(s), 2)} ms</b>` + h.res.units.map((u, k) => `<br><span class="sw" style="background:${unitColor(k + 1)}"></span> Unit ${k + 1}: ${fmt(u.mean[s], 1)} ± ${fmt(u.sd[s], 1)} µV`).join("");
+});
+$("unitCsvBtn").addEventListener("click", () => {
+  if (!F || !F.sorting.size) return;
+  const out = ["electrode,well,treatment,unit,spikes,rate_hz,peak_to_peak_uV,peak_uV,snr,isi_cv,min_isi_ms,refractory_removed,unsorted_on_electrode"];
+  for (const c of F.rows) {
+    const r = F.sorting.get(c); if (!r) continue;
+    const ch = F.channels[c], w = F.wells[ch.well], tr = w && w.what ? `"${String(w.what).replace(/"/g, '""')}"` : "", un = r.n - r.units.reduce((s, u) => s + u.n, 0);
+    r.units.forEach((u, k) => out.push([ch.label, ch.well, tr, k + 1, u.n, u.rate.toFixed(4), u.ptp.toFixed(2), u.peak.toFixed(2), u.snr.toFixed(2), Number.isFinite(u.cv) ? u.cv.toFixed(3) : "", Number.isFinite(u.minIsi) ? (u.minIsi * 1000).toFixed(3) : "", u.viol, un].join(",")));
+  }
+  download(F.name.replace(/\.spk$/i, "") + "_units.csv", out.join("\n"));
+});
+
+
+/* =====================================================================
+ * Spike browser: every spike of the selected electrode over the whole
+ * recording (time x amplitude / peak-to-peak / PC), coloured by unit.
+ * Click = one spike (waveform over its unit template); drag = time range
+ * (overlay of all spikes in it).
+ * ===================================================================== */
+const SB = { j: -1, range: null, hidden: new Set(), hover: -1 }; // j = index into F.perCh[S.sel]
+function sbReset() { SB.j = -1; SB.range = null; SB.hidden.clear(); SB.hover = -1; }
+function sbLabel(res, j) { return res ? res.labels[j] : -1; }        // -1 = electrode not sorted
+function sbVisible(res, j) { const u = sbLabel(res, j); return u < 0 || !SB.hidden.has(u); }
+function sbValues(c) {
+  const mode = $("sbY").value, res = F.sorting.get(c), idx = F.perCh[c], n = idx.length;
+  if ((mode === "pc1" || mode === "pc2") && res && res.pcs) { const a = mode === "pc1" ? 0 : 1; return { v: Float32Array.from({ length: n }, (_, j) => res.pcs[3 * j + a]), name: mode.toUpperCase() }; }
+  if (mode === "ptp") {
+    F.ptpCache = F.ptpCache || new Map();
+    if (!F.ptpCache.has(c)) {
+      const ns = F.header.NumSamplesPerBlock, sc = uV(), v = new Float32Array(n);
+      for (let j = 0; j < n; j++) { const o = F.waveOffset(idx[j]); let mn = Infinity, mx = -Infinity; for (let k = 0; k < ns; k++) { const x = F.dv.getInt16(o + 2 * k, true) * sc; if (x < mn) mn = x; if (x > mx) mx = x; } v[j] = mx - mn; }
+      F.ptpCache.set(c, v);
+    }
+    return { v: F.ptpCache.get(c), name: "Peak-to-peak (µV)" };
+  }
+  return { v: Float32Array.from(idx, i => F.amp[i]), name: "Trigger amplitude (µV)" };
+}
+function sbColor(u) { return u < 0 ? C["ink-2"] : unitColor(u); }
+
+function drawSpikeBrowser() {
+  const cv = $("sbScatter"), { ctx, W, H } = setup(cv); hit.sb = null;
+  const c = S.sel, idx = c >= 0 ? F.perCh[c] : null;
+  const pcOk = c >= 0 && F.sorting.get(c) && F.sorting.get(c).pcs;
+  for (const o of $("sbY").options) if (o.value.startsWith("pc")) o.disabled = !pcOk;
+  if (!pcOk && $("sbY").value.startsWith("pc")) $("sbY").value = "amp";
+  if (!idx || !idx.length) { $("sbLegend").innerHTML = ""; $("sbTitle").textContent = ""; drawSbWave(); return emptyMsg(ctx, W, H, "No spikes on this electrode"); }
+  const res = F.sorting.get(c) && F.sorting.get(c).pcs ? F.sorting.get(c) : null, n = idx.length, { v, name } = sbValues(c);
+  const sv = Float32Array.from(v).sort(); let y0 = pctl(sv, .001), y1 = pctl(sv, .999); const pad = (y1 - y0) * .06 || 1; y0 -= pad; y1 += pad;
+  const fr = frame(ctx, W, H, { x0: 0, x1: F.duration, y0, y1, xTicks: niceTicks(0, F.duration, Math.max(3, Math.floor(W / 110))), yTicks: niceTicks(y0, y1, 5), xFmt: fmtTime, xLabel: "Time (whole recording)", yLabel: name });
+  if (SB.range) { const a = fr.fx(SB.range[0]), b = fr.fx(SB.range[1]); ctx.fillStyle = C["accent-wash"]; ctx.fillRect(a, fr.T, Math.max(1, b - a), fr.ph); }
+  ctx.save(); ctx.beginPath(); ctx.rect(fr.L, fr.T, fr.pw, fr.ph); ctx.clip();
+  const xs = new Float32Array(n), ys = new Float32Array(n);
+  for (let j = 0; j < n; j++) { xs[j] = fr.fx(F.times[idx[j]]); ys[j] = fr.fy(v[j]); }
+  const order = res ? [0, ...res.units.map((_, k) => k + 1)] : [-1], alpha = Math.max(.25, Math.min(.85, 2500 / n));
+  for (const u of order) {
+    if (u >= 0 && SB.hidden.has(u)) continue;
+    ctx.fillStyle = sbColor(u); ctx.globalAlpha = u === 0 ? alpha * .6 : alpha;
+    for (let j = 0; j < n; j++) if (sbLabel(res, j) === u) ctx.fillRect(xs[j] - 1.2, ys[j] - 1.2, 2.4, 2.4);
+  }
+  ctx.globalAlpha = 1;
+  if (SB.j >= 0 && SB.j < n) { // selected spike: ring + guide line
+    const x = xs[SB.j], y = ys[SB.j];
+    ctx.strokeStyle = C.axis; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(Math.round(x) + .5, fr.T); ctx.lineTo(Math.round(x) + .5, fr.T + fr.ph); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 6, 0, 2 * Math.PI); ctx.stroke();
+    ctx.strokeStyle = C.surface; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, 8, 0, 2 * Math.PI); ctx.stroke();
+  }
+  ctx.restore();
+  hit.sb = { fr, xs, ys, res, c, n };
+  $("sbTitle").textContent = `${F.channels[c].label} · ${fmt(n, 0)} spikes`;
+  // legend: unit toggles (counts), or a hint when not sorted
+  if (res) {
+    const cnt = new Int32Array(res.units.length + 1); for (let j = 0; j < n; j++) cnt[res.labels[j]]++;
+    $("sbLegend").innerHTML = [...res.units.map((_, k) => k + 1), 0].map(u => `<label><input type="checkbox" data-u="${u}" ${SB.hidden.has(u) ? "" : "checked"}><span class="sw" style="background:${sbColor(u)}"></span>${u ? "Unit " + u : "Unsorted"} (${fmt(cnt[u], 0)})</label>`).join("");
+  } else $("sbLegend").innerHTML = `<span><span class="sw" style="background:${C["ink-2"]}"></span> Not sorted yet: run spike sorting to colour every spike by unit</span>`;
+  drawSbWave(); drawTrace();
+}
+
+// "385.2", "6:25.2" or "1:02:03.5" -> seconds
+function parseTime(str) {
+  const t = String(str).trim().replace(",", "."); if (!t) return NaN;
+  if (!t.includes(":")) return /^[+]?\d*\.?\d+(e[+-]?\d+)?$/i.test(t) ? +t : NaN;
+  const parts = t.split(":"); if (parts.length > 3 || parts.some(p => !/^\d*\.?\d+$/.test(p))) return NaN;
+  return parts.reduce((acc, p) => acc * 60 + +p, 0);
+}
+function syncRangeBoxes() {
+  const a = $("sbFrom"), b = $("sbTo");
+  for (const [el, v] of [[a, SB.range ? SB.range[0] : null], [b, SB.range ? SB.range[1] : null]]) {
+    if (document.activeElement === el) continue;
+    el.value = v === null ? "" : v.toFixed(3); el.removeAttribute("aria-invalid");
+  }
+}
+function applyRangeBoxes() {
+  if (!F || !hit.sb) return;
+  const a = $("sbFrom"), b = $("sbTo"), ta = parseTime(a.value), tb = parseTime(b.value);
+  if (!a.value.trim() && !b.value.trim()) { SB.range = null; a.removeAttribute("aria-invalid"); b.removeAttribute("aria-invalid"); return drawSpikeBrowser(); }
+  a.setAttribute("aria-invalid", String(!Number.isFinite(ta))); b.setAttribute("aria-invalid", String(!Number.isFinite(tb)));
+  if (!Number.isFinite(ta) || !Number.isFinite(tb)) return;
+  let lo = Math.max(0, Math.min(ta, tb)), hi = Math.min(F.duration, Math.max(ta, tb));
+  if (hi - lo < 1e-4) { b.setAttribute("aria-invalid", "true"); return; }
+  SB.range = [lo, hi]; SB.j = -1; SB.hover = -1; a.blur(); b.blur(); drawSpikeBrowser();
+}
+// small label in the top-left corner of a chart: [swatch] bold text · muted text
+function chartLabel(ctx, fr, parts) {
+  ctx.save(); ctx.font = `12px ${css("--font")}`; ctx.textBaseline = "middle"; ctx.textAlign = "left";
+  const pad = 6, h = 20; let w = pad;
+  for (const p of parts) { if (p.sw) w += 14; ctx.font = `${p.bold ? 600 : 400} 12px ${css("--font")}`; w += ctx.measureText(p.text).width + 8; }
+  const x = fr.L + 6, y = fr.T + 4;
+  ctx.globalAlpha = .9; ctx.fillStyle = C.surface; ctx.strokeStyle = C.grid; ctx.beginPath(); ctx.roundRect(x, y, w, h, 6); ctx.fill(); ctx.stroke(); ctx.globalAlpha = 1;
+  let cx = x + pad;
+  for (const p of parts) {
+    if (p.sw) { ctx.fillStyle = p.sw; ctx.beginPath(); ctx.roundRect(cx, y + h / 2 - 5, 10, 10, 2); ctx.fill(); cx += 14; }
+    ctx.font = `${p.bold ? 600 : 400} 12px ${css("--font")}`; ctx.fillStyle = p.muted ? C.muted : C.ink; ctx.fillText(p.text, cx, y + h / 2); cx += ctx.measureText(p.text).width + 8;
+  }
+  ctx.restore();
+}
+function sbSpikeWave(c, j) { return readWave(F.perCh[c][j], uV()); }
+function drawSbWave() {
+  const cv = $("sbWave"), { ctx, W, H } = setup(cv); hit.sbw = null;
+  const g = hit.sb, ns = F.header.NumSamplesPerBlock;
+  $("sbZoom").disabled = !(g && (SB.j >= 0 || SB.range)); $("sbClear").disabled = !(SB.j >= 0 || SB.range); syncRangeBoxes();
+  if (!g) { $("sbInfo").textContent = ""; return; }
+  const { c, res, n } = g, idx = F.perCh[c];
+  const msOf = (k, j) => (k - F.trig[idx[j]]) / F.fs * 1000;
+  if (SB.range) {
+    const [t0, t1] = SB.range, js = [];
+    for (let j = 0; j < n; j++) { const t = F.times[idx[j]]; if (t >= t0 && t <= t1 && sbVisible(res, j)) js.push(j); }
+    if (!js.length) { $("sbInfo").textContent = `No visible spikes between ${fmtTime(t0)} and ${fmtTime(t1)}.`; return emptyMsg(ctx, W, H, "No spikes in this range"); }
+    const MAX = 400, step = Math.max(1, js.length / MAX), pick = []; for (let s = 0; s < js.length && pick.length < MAX; s += step) pick.push(js[Math.floor(s)]);
+    const waves = pick.map(j => sbSpikeWave(c, j)), all = [];
+    for (const w of waves) for (let k = 0; k < ns; k += 3) all.push(w[k]);
+    all.sort((a, b) => a - b); let y0 = pctl(all, .003), y1 = pctl(all, .997); const pad = (y1 - y0) * .1 || 1; y0 -= pad; y1 += pad;
+    const x0 = msOf(0, pick[0]), x1 = msOf(ns - 1, pick[0]);
+    const fr = frame(ctx, W, H, { x0, x1, y0, y1, xTicks: niceTicks(x0, x1, 5), yTicks: niceTicks(y0, y1, 5), xLabel: "Time from trigger (ms)", yLabel: "µV" });
+    ctx.save(); ctx.beginPath(); ctx.rect(fr.L, fr.T, fr.pw, fr.ph); ctx.clip(); ctx.lineWidth = 1;
+    const a = Math.max(.08, Math.min(.6, 12 / pick.length)), byU = new Map();
+    // unsorted first so units are drawn on top
+    const ord = pick.map((j, q) => [j, q]).sort((p, q) => (sbLabel(res, p[0]) === 0) - (sbLabel(res, q[0]) === 0)).reverse();
+    for (const [j, q] of ord) {
+      const u = sbLabel(res, j); byU.set(u, (byU.get(u) || 0) + 1);
+      ctx.strokeStyle = sbColor(u); ctx.globalAlpha = SB.hover >= 0 ? (u === 0 ? a * .35 : a * .5) : (u === 0 ? a * .7 : a); ctx.beginPath();
+      for (let k = 0; k < ns; k++) { const X = fr.fx(msOf(k, j)), Y = fr.fy(waves[q][k]); k ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    const hq = pick.indexOf(SB.hover);
+    if (hq >= 0) { // hovered waveform on top, full strength
+      const u = sbLabel(res, SB.hover); ctx.strokeStyle = u <= 0 ? C.ink : sbColor(u); ctx.lineWidth = 2.5; ctx.beginPath();
+      for (let k = 0; k < ns; k++) { const X = fr.fx(msOf(k, SB.hover)), Y = fr.fy(waves[hq][k]); k ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }
+      ctx.stroke(); ctx.lineWidth = 1;
+    }
+    ctx.restore();
+    hit.sbw = { mode: "range", fr, pick, waves, msOf, ns, res, c };
+    if (hq >= 0) { const u = sbLabel(res, SB.hover), t = F.times[idx[SB.hover]];
+      chartLabel(ctx, fr, [{ sw: u < 0 ? C["ink-2"] : sbColor(u), text: u < 0 ? "Spike" : u ? "Unit " + u : "Unsorted", bold: true }, { text: `${fmtClock(t)} · ${t.toFixed(5)} s` }]); }
+    else chartLabel(ctx, fr, [{ text: `${fmtClock(t0)} – ${fmtClock(t1)}`, bold: true }, { text: `${fmt(pick.length, 0)} spikes`, muted: true }]);
+    const parts = [...byU.entries()].sort((p, q) => (p[0] || 99) - (q[0] || 99)).map(([u, k]) => `<span class="sw" style="background:${sbColor(u)}"></span> ${u < 0 ? "spikes" : u ? "Unit " + u : "Unsorted"} ${fmt(k, 0)}`);
+    $("sbInfo").innerHTML = `<b>${fmtTime(t0)} – ${fmtTime(t1)}</b> (${fmt(t1 - t0, 3)} s) · ${fmt(js.length, 0)} visible spikes${pick.length < js.length ? `, ${pick.length} drawn` : ""} · ${parts.join(" · ")}`;
+    return;
+  }
+  if (SB.j < 0 || SB.j >= n) { $("sbInfo").textContent = "Click a spike in the plot to see its waveform, or drag across time to overlay a range."; return emptyMsg(ctx, W, H, "No spike selected"); }
+  const j = SB.j, i = idx[j], u = sbLabel(res, j), w = sbSpikeWave(c, j), unit = res && u > 0 ? res.units[u - 1] : null;
+  let y0 = Math.min(...w), y1 = Math.max(...w);
+  if (unit) for (let k = 0; k < ns; k++) { y0 = Math.min(y0, unit.mean[k] - unit.sd[k]); y1 = Math.max(y1, unit.mean[k] + unit.sd[k]); }
+  const pad = (y1 - y0) * .1 || 1; y0 -= pad; y1 += pad;
+  // the unit template is the mean over the unit, aligned on the electrode's typical trigger; this spike uses its own trigger
+  const trT = unit ? Array.from(idx.subarray(0, 200), q => F.trig[q]).sort((a, b) => a - b)[Math.min(idx.length, 200) >> 1] : F.trig[i];
+  const msT = k => (k - trT) / F.fs * 1000, x0 = Math.min(msOf(0, j), msT(0)), x1 = Math.max(msOf(ns - 1, j), msT(ns - 1));
+  const fr = frame(ctx, W, H, { x0, x1, y0, y1, xTicks: niceTicks(x0, x1, 5), yTicks: niceTicks(y0, y1, 5), xLabel: "Time from trigger (ms)", yLabel: "µV" });
+  ctx.save(); ctx.beginPath(); ctx.rect(fr.L, fr.T, fr.pw, fr.ph); ctx.clip();
+  const col = sbColor(u);
+  if (unit) {
+    ctx.fillStyle = col; ctx.globalAlpha = .13; ctx.beginPath();
+    for (let k = 0; k < ns; k++) { const X = fr.fx(msT(k)), Y = fr.fy(unit.mean[k] + unit.sd[k]); k ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }
+    for (let k = ns - 1; k >= 0; k--) ctx.lineTo(fr.fx(msT(k)), fr.fy(unit.mean[k] - unit.sd[k]));
+    ctx.fill(); ctx.globalAlpha = .9; ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.beginPath();
+    for (let k = 0; k < ns; k++) { const X = fr.fx(msT(k)), Y = fr.fy(unit.mean[k]); k ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }
+    ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+  }
+  ctx.strokeStyle = u <= 0 ? C.ink : col; ctx.lineWidth = 2; ctx.beginPath();
+  for (let k = 0; k < ns; k++) { const X = fr.fx(msOf(k, j)), Y = fr.fy(w[k]); k ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }
+  ctx.stroke();
+  ctx.fillStyle = u <= 0 ? C.ink : col; for (let k = 0; k < ns; k++) ctx.fillRect(fr.fx(msOf(k, j)) - 1.5, fr.fy(w[k]) - 1.5, 3, 3);
+  ctx.strokeStyle = C.axis; ctx.setLineDash([3, 3]); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(fr.fx(0), fr.T); ctx.lineTo(fr.fx(0), fr.T + fr.ph); ctx.stroke(); ctx.setLineDash([]);
+  ctx.restore();
+  hit.sbw = { mode: "spike", fr, w, msOf: k => msOf(k, j), ns, unit, msT };
+  chartLabel(ctx, fr, [{ sw: u < 0 ? C["ink-2"] : col, text: u < 0 ? "Spike" : u ? "Unit " + u : "Unsorted", bold: true }, { text: `${fmtClock(F.times[i])} · ${F.times[i].toFixed(5)} s` }]);
+  let mn = Infinity, mx = -Infinity; for (const x of w) { mn = Math.min(mn, x); mx = Math.max(mx, x); }
+  const prev = j > 0 ? (F.times[i] - F.times[idx[j - 1]]) * 1000 : NaN, next = j < n - 1 ? (F.times[idx[j + 1]] - F.times[i]) * 1000 : NaN;
+  const uTxt = u < 0 ? "electrode not sorted" : u ? `<span class="sw" style="background:${col}"></span> <b>Unit ${u}</b>` : `<span class="sw" style="background:${col}"></span> <b>Unsorted</b>`;
+  $("sbInfo").innerHTML = `Spike <b>${fmt(j + 1, 0)}</b> of ${fmt(n, 0)} · <b>${fmtClock(F.times[i])}</b> (${fmt(F.times[i], 5)} s) · ${uTxt} · trigger ${fmt(F.amp[i], 1)} µV · peak-to-peak ${fmt(mx - mn, 1)} µV · noise SD ${fmt(F.sd[i] * 1e6, 2)} µV · ISI before ${fmt(prev, 2)} ms, after ${fmt(next, 2)} ms`
+    + (unit ? ` · <span style="color:var(--muted)">dashed: Unit ${u} mean ± SD</span>` : "");
+}
+
+function sbStep(dir) {
+  const g = hit.sb; if (!g) return;
+  let j = SB.j < 0 ? (dir > 0 ? -1 : g.n) : SB.j;
+  for (j += dir; j >= 0 && j < g.n; j += dir) if (sbVisible(g.res, j)) { SB.j = j; SB.range = null; return drawSpikeBrowser(); }
+}
+{
+  const cv = $("sbScatter"), br = $("sbBrush"); let d = null;
+  const pos = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  const tOf = x => { const g = hit.sb.fr; return Math.min(Math.max((x - g.L) / g.pw, 0), 1) * F.duration; };
+  cv.addEventListener("pointerdown", e => { if (!hit.sb || e.button !== 0) return; d = { x: pos(e).x }; cv.setPointerCapture(e.pointerId); e.preventDefault(); });
+  cv.addEventListener("pointermove", e => {
+    if (!d) return; const x = pos(e).x, g = hit.sb.fr, a = Math.max(g.L, Math.min(d.x, x)), b = Math.min(g.L + g.pw, Math.max(d.x, x));
+    if (Math.abs(x - d.x) > 4) { hideTip(); Object.assign(br.style, { display: "block", left: a + "px", width: (b - a) + "px", top: g.T + "px", bottom: "auto", height: g.ph + "px" }); }
+  });
+  const end = (e, cancel) => {
+    if (!d) return; const { x, y } = pos(e), x0 = d.x; d = null; br.style.display = "none"; if (cancel || !hit.sb) return;
+    if (Math.abs(x - x0) > 4) { const a = tOf(Math.min(x, x0)), b = tOf(Math.max(x, x0)); SB.range = [a, b]; SB.j = -1; return drawSpikeBrowser(); }
+    const g = hit.sb; let best = -1, bd = 100;
+    for (let j = 0; j < g.n; j++) { if (!sbVisible(g.res, j)) continue; const q = (g.xs[j] - x) ** 2 + (g.ys[j] - y) ** 2; if (q < bd) { bd = q; best = j; } }
+    if (best >= 0) { SB.j = best; SB.range = null; drawSpikeBrowser(); }
+  };
+  cv.addEventListener("pointerup", e => end(e, false)); cv.addEventListener("pointercancel", e => end(e, true));
+  chartHover("sbScatter", (x, y) => {
+    const g = hit.sb; if (!g || d) return null; let best = -1, bd = 64;
+    for (let j = 0; j < g.n; j++) { if (!sbVisible(g.res, j)) continue; const q = (g.xs[j] - x) ** 2 + (g.ys[j] - y) ** 2; if (q < bd) { bd = q; best = j; } }
+    if (best < 0) return null;
+    const i = F.perCh[g.c][best], u = sbLabel(g.res, best);
+    return `<b>${u < 0 ? "Spike" : u ? "Unit " + u : "Unsorted"}</b> · #${fmt(best + 1, 0)}<br>${fmtClock(F.times[i])} (${fmt(F.times[i], 4)} s)<br>trigger ${fmt(F.amp[i], 1)} µV · click to inspect`;
+  });
+  const sbw = $("sbWave");
+  sbw.addEventListener("mousemove", e => {
+    const h = hit.sbw; if (!h || h.mode !== "range") return;
+    const r = sbw.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    let best = -1, bd = 10; // px
+    if (x >= h.fr.L && x <= h.fr.L + h.fr.pw) h.pick.forEach((j, q) => {
+      let k = 0, kd = 1e9; for (let s = 0; s < h.ns; s++) { const dd = Math.abs(h.fr.fx(h.msOf(s, j)) - x); if (dd < kd) { kd = dd; k = s; } }
+      const dy = Math.abs(h.fr.fy(h.waves[q][k]) - y); if (dy < bd) { bd = dy; best = j; }
+    });
+    if (best !== SB.hover) { SB.hover = best; drawSbWave(); }
+    if (best >= 0) { const i = F.perCh[h.c][best], u = sbLabel(h.res, best); showTip(e, `<b>${u < 0 ? "Spike" : u ? "Unit " + u : "Unsorted"}</b> · #${fmt(best + 1, 0)}<br>${fmtClock(F.times[i])} (${F.times[i].toFixed(5)} s)<br>click to inspect this spike`); }
+    else hideTip();
+  });
+  sbw.addEventListener("mouseleave", () => { hideTip(); if (SB.hover >= 0) { SB.hover = -1; if (hit.sbw && hit.sbw.mode === "range") drawSbWave(); } });
+  sbw.addEventListener("click", () => { if (hit.sbw && hit.sbw.mode === "range" && SB.hover >= 0) { SB.j = SB.hover; SB.range = null; SB.hover = -1; hideTip(); drawSpikeBrowser(); } });
+  for (const id of ["sbFrom", "sbTo"]) {
+    $(id).addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); applyRangeBoxes(); } else if (e.key === "Escape") { e.target.blur(); syncRangeBoxes(); } });
+    $(id).addEventListener("change", applyRangeBoxes);
+  }
+  chartHover("sbWave", x => {
+    const h = hit.sbw; if (!h || h.mode !== "spike" || x < h.fr.L || x > h.fr.L + h.fr.pw) return null;
+    let k = 0, bd = 1e9; for (let q = 0; q < h.ns; q++) { const dd = Math.abs(h.fr.fx(h.msOf(q)) - x); if (dd < bd) { bd = dd; k = q; } }
+    return `<b>${fmt(h.msOf(k), 2)} ms</b><br>this spike ${fmt(h.w[k], 1)} µV` + (h.unit ? `<br>unit mean ${fmt(h.unit.mean[k], 1)} ± ${fmt(h.unit.sd[k], 1)} µV` : "");
+  });
+  $("sbLegend").addEventListener("change", e => { const u = +e.target.dataset.u; if (Number.isNaN(u)) return; e.target.checked ? SB.hidden.delete(u) : SB.hidden.add(u); drawSpikeBrowser(); });
+  $("sbY").addEventListener("change", e => { if (F) drawSpikeBrowser(); e.target.blur(); });
+  $("sbPrev").addEventListener("click", () => sbStep(-1));
+  $("sbNext").addEventListener("click", () => sbStep(1));
+  $("sbClear").addEventListener("click", () => { SB.j = -1; SB.range = null; drawSpikeBrowser(); });
+  $("sbZoom").addEventListener("click", () => {
+    if (SB.range) return setWindow(SB.range[0], SB.range[1]);
+    if (SB.j >= 0) { const t = F.times[F.perCh[S.sel][SB.j]]; setWindow(t - .5, t + .5); }
+  });
+}
+
+
+/* =====================================================================
+ * Signal trace: the stored spike snippets placed at their true times over
+ * the current time window (same window as the raster), coloured by unit.
+ * A .spk file keeps only a short cut-out around each detected spike; the
+ * signal between cut-outs was not saved and is shown as a dotted baseline.
+ * ===================================================================== */
+function traceChans() {
+  if (S.sel < 0) return [];
+  if ($("trMode").value === "sel") return [S.sel];
+  const w = F.channels[S.sel].well; return F.rows.filter(c => F.channels[c].well === w && (F.counts[c] > 0 || c === S.sel));
+}
+function traceSpikes(c, pad) { // spikes (global indices) whose cut-out overlaps [t0 - pad, t1 + pad]
+  const idx = F.perCh[c], t = F.times, a = S.t0 - pad, b = S.t1 + pad;
+  let lo = 0, hi = idx.length; while (lo < hi) { const m = (lo + hi) >> 1; if (t[idx[m]] < a) lo = m + 1; else hi = m; }
+  let e = lo; hi = idx.length; while (e < hi) { const m = (e + hi) >> 1; if (t[idx[m]] <= b) e = m + 1; else hi = m; }
+  return idx.subarray(lo, e);
+}
+function drawTrace() {
+  const cv = $("trace"), chans = traceChans(), multi = chans.length > 1;
+  const wantH = (multi ? Math.max(240, chans.length * (chans.length > 16 ? 40 : 58) + 34) : 240) + "px"; if (cv.style.height !== wantH) cv.style.height = wantH;
+  const { ctx, W, H } = setup(cv); hit.tr = null;
+  const ns = F.header.NumSamplesPerBlock, fs = F.fs, sc = uV(), snip = (ns - 1) / fs, pre = F.n ? F.trig[0] : 0;
+  $("trNote").textContent = `A .spk file stores only a ${fmt(ns / fs * 1000, 2)} ms cut-out around each detected spike (${fmt(pre / fs * 1000, 2)} ms before the threshold crossing), not the continuous signal. Each cut-out is drawn at its true time and coloured by unit; the dotted line marks stretches that were not saved. Same time window as the raster · drag to zoom · click a spike to open it in the Spike browser.`;
+  $("trReset").disabled = S.t0 <= 0 && S.t1 >= F.duration;
+  if (!chans.length) { $("trTitle").textContent = ""; return emptyMsg(ctx, W, H, "Select an electrode"); }
+  const L = 58, R = 10, T = 6, B = 26, pw = W - L - R, ph = H - T - B, lh = ph / chans.length;
+  const fx = t => L + (t - S.t0) / (S.t1 - S.t0) * pw;
+  const lists = chans.map(c => traceSpikes(c, snip));
+  // y scale: fixed, or the 99.5th percentile of |µV| over (up to) 300 cut-outs per lane, shared by all lanes
+  let A = +$("trScale").value;
+  if (!A) {
+    const vals = [];
+    for (const l of lists) { const step = Math.max(1, l.length / 300); for (let s = 0; s < l.length; s += step) { const o = F.waveOffset(l[Math.floor(s)]); for (let k = 0; k < ns; k += 2) vals.push(Math.abs(F.dv.getInt16(o + 2 * k, true) * sc)); } }
+    vals.sort((a, b) => a - b); A = Math.max(10, pctl(vals, .995) * 1.1);
+  }
+  let total = 0;
+  chans.forEach((c, r) => {
+    const y0 = T + r * lh, mid = y0 + lh / 2, half = lh / 2 - 3, fy = v => mid - Math.max(-1.05, Math.min(1.05, v / A)) * half, ch = F.channels[c];
+    if (r) { ctx.strokeStyle = C.grid; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, Math.round(y0) + .5); ctx.lineTo(L + pw, Math.round(y0) + .5); ctx.stroke(); }
+    if (c === S.sel && multi) { ctx.fillStyle = C["accent-wash"]; ctx.fillRect(L, y0, pw, lh); }
+    ctx.fillStyle = c === S.sel ? C.ink : C.muted; ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.font = `11px ${css("--font")}`;
+    ctx.fillText(ch.label, L - 6, mid - (lh > 40 ? 7 : 0)); if (lh > 40) { ctx.fillStyle = C.muted; ctx.fillText(`±${fmt(A, 0)} µV`, L - 6, mid + 7); }
+    ctx.save(); ctx.beginPath(); ctx.rect(L, y0 + 1, pw, lh - 2); ctx.clip();
+    ctx.strokeStyle = C.axis; ctx.setLineDash([2, 4]); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(L, Math.round(mid) + .5); ctx.lineTo(L + pw, Math.round(mid) + .5); ctx.stroke(); ctx.setLineDash([]);
+    const sorted = F.sorting.has(c);
+    for (const i of lists[r]) {
+      const ts = F.times[i] - F.trig[i] / fs, x0 = fx(ts), x1 = fx(ts + snip); if (x1 < L || x0 > L + pw) continue;
+      const col = sorted ? (F.unitOf[i] > 0 ? unitColor(F.unitOf[i]) : C.muted) : C["ink-2"], o = F.waveOffset(i);
+      if (x1 - x0 < 3) { // too narrow to show samples: one bar from min to max
+        let mn = Infinity, mx = -Infinity; for (let k = 0; k < ns; k++) { const v = F.dv.getInt16(o + 2 * k, true) * sc; if (v < mn) mn = v; if (v > mx) mx = v; }
+        ctx.fillStyle = col; const a = fy(mx), b = fy(mn); ctx.fillRect(Math.floor(x0), a, Math.max(1, x1 - x0), Math.max(1, b - a));
+      } else {
+        ctx.strokeStyle = col; ctx.lineWidth = x1 - x0 > 40 ? 1.5 : 1; ctx.beginPath();
+        for (let k = 0; k < ns; k++) { const X = fx(ts + k / fs), Y = fy(F.dv.getInt16(o + 2 * k, true) * sc); k ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }
+        ctx.stroke();
+        if (x1 - x0 > 6 * ns) { ctx.fillStyle = col; for (let k = 0; k < ns; k++) ctx.fillRect(fx(ts + k / fs) - 1.5, fy(F.dv.getInt16(o + 2 * k, true) * sc) - 1.5, 3, 3); }
+      }
+      total++;
+    }
+    // spike opened in the Spike browser: marker above it
+    if (c === S.sel && SB.j >= 0 && SB.j < F.perCh[c].length) {
+      const i = F.perCh[c][SB.j], x = fx(F.times[i]);
+      if (x >= L && x <= L + pw) { ctx.fillStyle = C.ink; ctx.beginPath(); ctx.moveTo(x - 5, y0 + 2); ctx.lineTo(x + 5, y0 + 2); ctx.lineTo(x, y0 + 9); ctx.fill(); }
+    }
+    ctx.restore();
+  });
+  ctx.strokeStyle = C.axis; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(L, T + ph + .5); ctx.lineTo(L + pw, T + ph + .5); ctx.stroke();
+  ctx.fillStyle = C.muted; ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.font = `11px ${css("--font")}`;
+  const span = S.t1 - S.t0, tf = span < 2 ? v => fmt(v, span < .05 ? 4 : 3) + " s" : fmtTime;
+  for (const v of niceTicks(S.t0, S.t1, Math.max(2, Math.floor(pw / 110)))) ctx.fillText(tf(v), fx(v), T + ph + 6);
+  hit.tr = { L, T, pw, ph, lh, chans, lists, fx, A, snip };
+  $("trTitle").textContent = `${multi ? `well ${F.channels[S.sel].well} · ${chans.length} electrodes` : F.channels[S.sel].label} · ${span < 120 ? `${fmtClock(S.t0)} – ${fmtClock(S.t1)}` : `${fmtTime(S.t0)} – ${fmtTime(S.t1)}`} · ${fmt(total, 0)} cut-outs`;
+}
+function traceHit(x, y) { // nearest cut-out under the cursor (within 4 px of its span)
+  const g = hit.tr; if (!g || x < g.L || x > g.L + g.pw) return null;
+  const r = Math.floor((y - g.T) / g.lh); if (r < 0 || r >= g.chans.length) return null;
+  const c = g.chans[r], t = S.t0 + (x - g.L) / g.pw * (S.t1 - S.t0), tol = 4 / g.pw * (S.t1 - S.t0);
+  let best = -1, bd = Infinity;
+  for (const i of g.lists[r]) { const ts = F.times[i] - F.trig[i] / F.fs, te = ts + g.snip, d = t < ts ? ts - t : t > te ? t - te : 0; if (d <= tol && d < bd) { bd = d; best = i; } }
+  return { r, c, t, i: best };
+}
+{
+  const cv = $("trace"), br = $("trBrush"); let d = null;
+  const pos = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  const tOf = x => { const g = hit.tr; return S.t0 + Math.min(Math.max((x - g.L) / g.pw, 0), 1) * (S.t1 - S.t0); };
+  cv.addEventListener("pointerdown", e => { if (!hit.tr || e.button !== 0) return; d = { x: pos(e).x }; cv.setPointerCapture(e.pointerId); e.preventDefault(); });
+  cv.addEventListener("pointermove", e => {
+    if (!d) return; const x = pos(e).x, g = hit.tr, a = Math.max(g.L, Math.min(d.x, x)), b = Math.min(g.L + g.pw, Math.max(d.x, x));
+    if (Math.abs(x - d.x) > 4) { hideTip(); Object.assign(br.style, { display: "block", left: a + "px", width: (b - a) + "px", top: g.T + "px", bottom: "auto", height: g.ph + "px" }); }
+  });
+  const end = (e, cancel) => {
+    if (!d) return; const { x, y } = pos(e), x0 = d.x; d = null; br.style.display = "none"; if (cancel || !hit.tr) return;
+    if (Math.abs(x - x0) > 4) return setWindow(tOf(Math.min(x, x0)), tOf(Math.max(x, x0)));
+    const h = traceHit(x, y); if (!h || h.i < 0) return;
+    const jj = F.perCh[h.c].indexOf(h.i);
+    if (h.c !== S.sel) select(h.c);
+    SB.j = jj; SB.range = null; drawSpikeBrowser();
+  };
+  cv.addEventListener("pointerup", e => end(e, false)); cv.addEventListener("pointercancel", e => end(e, true));
+  chartHover("trace", (x, y) => {
+    if (d) return null; const h = traceHit(x, y); if (!h) return null;
+    const lab = F.channels[h.c].label;
+    if (h.i < 0) return `<b>${lab}</b> · ${fmtClock(h.t)}<br><span style="color:var(--muted)">not saved in the .spk file</span>`;
+    const u = F.unitOf[h.i], k = Math.max(0, Math.min(F.header.NumSamplesPerBlock - 1, Math.round((h.t - (F.times[h.i] - F.trig[h.i] / F.fs)) * F.fs)));
+    const v = F.dv.getInt16(F.waveOffset(h.i) + 2 * k, true) * uV();
+    return `<b>${lab}</b> · ${F.sorting.has(h.c) ? (u > 0 ? `<span class="sw" style="background:${unitColor(u)}"></span> Unit ${u}` : "Unsorted") : "not sorted"}<br>spike at ${fmtClock(F.times[h.i])} (${F.times[h.i].toFixed(5)} s)<br>${fmt(v, 1)} µV at ${fmt((k - F.trig[h.i]) / F.fs * 1000, 2)} ms from the trigger · click to inspect`;
+  });
+  $("trMode").addEventListener("change", e => { if (F) drawTrace(); e.target.blur(); });
+  $("trScale").addEventListener("change", e => { if (F) drawTrace(); e.target.blur(); });
+  $("trReset").addEventListener("click", () => setWindow(0, F.duration));
+}
+
+/* =====================================================================
+ * Interaction
+ * ===================================================================== */
+$("plate").addEventListener("mousemove", e => {
+  const r = e.target.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  const h = hit.plate.find(b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+  if (!h) return hideTip();
+  const ch = F.channels[h.c], w = F.wells[ch.well];
+  const now = P.active && F.recorded.has(h.c) ? `<br>at ${fmtClock(P.t)}: ${fmt(instRates(P.t)[h.c], 1)} Hz` : "";
+  showTip(e, `<b>${ch.label}</b><br>${F.recorded.has(h.c) ? `${fmt(F.counts[h.c], 0)} spikes · ${fmt(F.rate[h.c], 3)} Hz mean` : "not recorded"}${now}${w && w.what ? "<br>" + esc(w.what) : ""}`);
+});
+$("plate").addEventListener("mouseleave", hideTip);
+$("plate").addEventListener("click", e => {
+  const r = e.target.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  const h = hit.plate.find(b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+  if (h && F.recorded.has(h.c)) select(h.c);
+});
+
+let drag = null;
+const rasterPos = e => { const r = $("raster").getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+const xToT = x => { const g = hit.raster; return S.t0 + Math.min(Math.max((x - g.L) / g.pw, 0), 1) * (S.t1 - S.t0); };
+const rc = $("raster");
+rc.addEventListener("pointerdown", e => { if (e.button !== 0) return; drag = { x: rasterPos(e).x, id: e.pointerId }; rc.setPointerCapture(e.pointerId); e.preventDefault(); });
+rc.addEventListener("pointermove", e => {
+  if (!F || !drag) return;
+  const x = rasterPos(e).x, g = hit.raster, a = Math.max(g.L, Math.min(drag.x, x)), b = Math.min(g.L + g.pw, Math.max(drag.x, x));
+  Object.assign($("brush").style, { display: "block", left: a + "px", width: (b - a) + "px" });
+});
+const endDrag = (e, cancel) => {
+  if (!drag) return;
+  const { x, y } = rasterPos(e), dx = Math.abs(x - drag.x); $("brush").style.display = "none";
+  const start = drag.x; drag = null;
+  if (cancel) return;
+  if (dx > 4) return setWindow(xToT(Math.min(x, start)), xToT(Math.max(x, start)));
+  const g = hit.raster, r = Math.floor((y - g.T) / g.rh);
+  if (r >= 0 && r < g.rows.length) select(g.rows[r]);
+};
+rc.addEventListener("pointerup", e => endDrag(e, false));
+rc.addEventListener("pointercancel", e => endDrag(e, true));
+$("raster").addEventListener("mousemove", e => {
+  if (drag) return hideTip();
+  const { x, y } = rasterPos(e), g = hit.raster, r = Math.floor((y - g.T) / g.rh);
+  if (r < 0 || r >= g.rows.length || x < g.L) return hideTip();
+  const c = g.rows[r];
+  showTip(e, `<b>${F.channels[c].label}</b> · ${fmtTime(xToT(x))}<br>${fmt(spikesInWindowFor(c), 0)} spikes in window`);
+});
+const spikesInWindowFor = c => spikesInWindow(c).length;
+$("raster").addEventListener("mouseleave", hideTip);
+$("resetZoom").addEventListener("click", () => setWindow(0, F.duration));
+$("rasterRows").addEventListener("change", e => { if (F) drawRaster(); e.target.blur(); });
+
+function chartHover(id, fn) {
+  $(id).addEventListener("mousemove", e => { const r = e.target.getBoundingClientRect(), html = fn(e.clientX - r.left, e.clientY - r.top); html ? showTip(e, html) : hideTip(); });
+  $(id).addEventListener("mouseleave", hideTip);
+}
+chartHover("wf", (x) => { const h = hit.wf; if (!h || x < h.fr.L || x > h.fr.L + h.fr.pw) return null;
+  let best = 0, bd = 1e9; for (let k = 0; k < h.ns; k++) { const d = Math.abs(h.fr.fx(h.ms(k)) - x); if (d < bd) { bd = d; best = k; } }
+  return `<b>${fmt(h.ms(best), 2)} ms</b><br>mean ${fmt(h.mean[best], 2)} µV · SD ${fmt(h.sdv[best], 2)} µV`; });
+chartHover("fr", (x) => { const h = hit.fr; if (!h) return null; const b = Math.floor((x - h.fr.L) / h.bpx); if (b < 0 || b >= h.nb) return null;
+  const t = S.t0 + b * h.bw; return `<b>${fmtTime(t)} – ${fmtTime(Math.min(t + h.bw, S.t1))}</b><br>${fmt(h.bins[b], 2)} Hz`; });
+chartHover("isi", (x) => { const h = hit.isi; if (!h) return null; const b = Math.floor((x - h.fr.L) / h.bpx); if (b < 0 || b >= h.nb) return null;
+  const a = 10 ** (h.lo + b / h.nb * (h.hi - h.lo)), z = 10 ** (h.lo + (b + 1) / h.nb * (h.hi - h.lo)), f = v => v >= 1000 ? fmt(v / 1000, 2) + " s" : fmt(v, v < 1 ? 2 : 1) + " ms";
+  return `<b>${f(a)} – ${f(z)}</b><br>${fmt(h.bins[b], 0)} intervals`; });
+chartHover("amp", (x, y) => { const h = hit.amp; if (!h) return null; let best = -1, bd = 64;
+  for (const i of h.idx) { const d = (h.fr.fx(F.times[i]) - x) ** 2 + (h.fr.fy(F.amp[i]) - y) ** 2; if (d < bd) { bd = d; best = i; } }
+  return best < 0 ? null : `<b>${fmtTime(F.times[best])}</b> (${fmt(F.times[best], 4)} s)<br>${fmt(F.amp[best], 1)} µV`; });
+
+$("tblActive").addEventListener("change", () => F && drawTable());
+$("elTable").addEventListener("click", e => {
+  const th = e.target.closest("th"); if (th) { const k = th.dataset.k; S.sort = { key: k, dir: S.sort.key === k ? -S.sort.dir : (k === "n" || k === "rate" ? -1 : 1) }; return drawTable(); }
+  const tr = e.target.closest("tr[data-c]"); if (tr) select(+tr.dataset.c);
+});
+
+$("csvBtn").addEventListener("click", () => {
+  if (S.sel < 0) return;
+  const ch = F.channels[S.sel], idx = spikesInWindow(S.sel);
+  const su = F.sorting.has(S.sel), lines = ["time_s,electrode,trigger_amplitude_uV,noise_sd_uV,threshold_multiplier" + (su ? ",unit" : "")];
+  for (const i of idx) lines.push(`${F.times[i].toFixed(6)},${ch.label},${F.amp[i].toFixed(3)},${(F.sd[i] * 1e6).toFixed(4)},${F.thr[i]}` + (su ? "," + F.unitOf[i] : ""));
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
+  a.download = `${F.name.replace(/\.spk$/i, "")}_${ch.label}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+
+// ---- waveform grid ----
+$("wgN").addEventListener("change", () => F && drawWaveGrid());
+$("wgScale").addEventListener("change", () => F && drawWaveGrid());
+$("wgrid").addEventListener("mousemove", e => {
+  if (e.target.tagName !== "CANVAS") return hideTip();
+  const h = wgHit(e); if (!h) return hideTip();
+  const ch = F.channels[h.c], d = h.d;
+  showTip(e, `<b>${ch.label}</b><br>${fmt(d.n, 0)} spikes in window${d.shown < d.n ? ` (${d.shown} shown)` : ""}` +
+    (d.waves.length ? `<br>mean: min ${fmt(d.mn, 1)} µV · max ${fmt(d.mx, 1)} µV · peak-to-peak ${fmt(d.ptp, 1)} µV` : ""));
+});
+$("wgrid").addEventListener("mouseleave", hideTip);
+$("wgrid").addEventListener("click", e => { if (e.target.tagName !== "CANVAS") return; const h = wgHit(e); if (h) select(h.c); });
+
+// ---- replay controls ----
+$("playBtn").addEventListener("click", e => { P.playing ? pause() : play(); e.currentTarget.blur(); });
+$("stopBtn").addEventListener("click", e => { stopReplay(); e.currentTarget.blur(); });
+$("speedSel").addEventListener("change", e => { setSpeed(+e.target.value); e.target.blur(); });
+const tl = $("timeline"); let tlDrag = false;
+const tlTime = e => { const g = hit.tl, r = tl.getBoundingClientRect(); return Math.min(Math.max((e.clientX - r.left - g.L) / g.pw, 0), 1) * F.duration; };
+tl.addEventListener("pointerdown", e => { if (!F) return; tlDrag = true; tl.setPointerCapture(e.pointerId); seek(tlTime(e)); });
+tl.addEventListener("pointermove", e => {
+  if (!F || !hit.tl) return;
+  const t = tlTime(e);
+  if (tlDrag) { seek(t); hideTip(); return; }
+  const b = Math.min(hit.tl.nb - 1, Math.floor(t / hit.tl.bw));
+  showTip(e, `<b>${fmtTime(t)}</b><br>${fmt(hit.tl.bins[b], 0)} spikes/s across all electrodes`);
+});
+tl.addEventListener("pointerup", () => { tlDrag = false; });
+tl.addEventListener("pointercancel", () => { tlDrag = false; });
+tl.addEventListener("mouseleave", hideTip);
+document.addEventListener("keydown", e => {
+  if (!F || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+  if (e.code === "Space") { e.preventDefault(); P.playing ? pause() : play(); }
+  else if (e.key === "ArrowRight" || e.key === "ArrowLeft") { e.preventDefault(); const d = (e.shiftKey ? 10 : 1) * Math.max(P.tau, 0.05) * (e.key === "ArrowRight" ? 1 : -1); seek(P.t + d); }
+});
+
+function download(name, text, type = "text/csv") {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+// full spike table (same columns as `python axion_spk.py file.spk --csv out.csv`)
+$("csvAllBtn").addEventListener("click", () => {
+  if (!F) return;
+  const ns = F.header.NumSamplesPerBlock, sc = uV(), su = F.sorting.size > 0, out = ["time_s,electrode,trigger_amplitude_uV,min_uV,max_uV,std_uV,threshold_multiplier" + (su ? ",unit" : "")];
+  for (let i = 0; i < F.n; i++) {
+    const o = F.waveOffset(i); let mn = Infinity, mx = -Infinity;
+    for (let k = 0; k < ns; k++) { const v = F.dv.getInt16(o + 2 * k, true) * sc; if (v < mn) mn = v; if (v > mx) mx = v; }
+    const c = F.ch[i], lab = c >= 0 ? F.channels[c].label : "?";
+    out.push(`${F.times[i].toFixed(6)},${lab},${F.amp[i].toFixed(3)},${mn.toFixed(3)},${mx.toFixed(3)},${(F.sd[i] * 1e6).toFixed(3)},${F.thr[i].toFixed(3)}` + (su ? "," + (F.unitOf[i] >= 0 ? F.unitOf[i] : "") : ""));
+  }
+  download(F.name.replace(/\.spk$/i, "") + "_spikes.csv", out.join("\n"));
+});
+
+$("themeBtn").addEventListener("click", () => {
+  const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.dataset.theme = dark ? "light" : "dark"; drawAll();
+});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", drawAll);
+let rt; new ResizeObserver(() => { clearTimeout(rt); rt = setTimeout(drawAll, 80); }).observe(document.body);
+
+/* =====================================================================
+ * Loading
+ * ===================================================================== */
+async function load(file) {
+  $("err").textContent = ""; $("fname").textContent = `Loading ${file.name}…`;
+  try {
+    const buf = await file.arrayBuffer();
+    const t0 = performance.now();
+    const parsed = parseSpk(buf); parsed.name = file.name; parsed.size = file.size;
+    prepare(parsed);
+    SS.cancel = true; SS.checked.clear(); SS.hl = 0; stopSpin(); sbReset();
+    F = parsed; S.t0 = 0; S.t1 = F.duration;
+    P.playing = false; P.active = false; P.t = 0; cancelAnimationFrame(P.raf); hit.tl = null; setSpeed(+$("speedSel").value);
+    let best = -1; for (const c of F.rows) if (best < 0 || F.counts[c] > F.counts[best]) best = c; S.sel = best;
+    $("drop").hidden = true; $("app").hidden = false;
+    $("fname").textContent = `${file.name} · parsed in ${Math.round(performance.now() - t0)} ms`;
+    drawAll();
+    return true;
+  } catch (e) {
+    console.error(e);
+    if (!F) { $("drop").hidden = false; $("app").hidden = true; $("fname").textContent = "No file loaded"; }
+    else $("fname").textContent = `${F.name} (kept: the new file could not be read)`;
+    $("err").textContent = `Could not read ${file.name}: ${e.message}`;
+    return false;
+  }
+}
+$("fileIn").addEventListener("change", e => e.target.files[0] && load(e.target.files[0]));
+["dragover", "dragenter"].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); $("drop").classList.add("over"); }));
+["dragleave", "drop"].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); $("drop").classList.remove("over"); }));
+document.addEventListener("drop", e => {
+  const f = e.dataTransfer.files[0]; if (f) return load(f);
+  const link = (e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain") || "").split(/\r?\n/).find(l => l && !l.startsWith("#"));
+  if (link && /^(https?:)?\/\//i.test(link.trim())) { $("urlIn").value = link.trim(); loadUrl(link.trim()); }
+});
+
+/* ---- loading from a URL ------------------------------------------------ */
+function normalizeUrl(u) {
+  u = u.trim();
+  let m = u.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/(.+)$/i);          // GitHub file page -> raw
+  if (m) return `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3].replace(/\?.*$/, "")}`;
+  if (/^https?:\/\/(www\.)?dropbox\.com\//i.test(u)) {                                 // Dropbox share -> direct
+    const x = new URL(u); x.hostname = "dl.dropboxusercontent.com"; x.searchParams.delete("dl"); return x.toString();
+  }
+  return u;
+}
+function nameFromResponse(r, url) {
+  const cd = r.headers.get("content-disposition") || "", m = cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+  if (m) return decodeURIComponent(m[1]);
+  try { const seg = new URL(url, location.href).pathname.split("/").filter(Boolean).pop(); if (seg) return decodeURIComponent(seg); } catch (e) {}
+  return "remote.spk";
+}
+let urlAbort = null;
+async function loadUrl(raw, { updateAddress = true } = {}) {
+  const url = normalizeUrl(raw);
+  if (urlAbort) urlAbort.abort();
+  const ctl = urlAbort = new AbortController();
+  $("err").textContent = ""; $("urlBtn").disabled = true;
+  const prevName = $("fname").textContent;
+  $("fname").textContent = `Connecting to ${url}…`;
+  try {
+    let r;
+    try { r = await fetch(url, { signal: ctl.signal }); }
+    catch (e) {
+      if (e.name === "AbortError") return;
+      throw new Error("The browser could not download it. Either the address is unreachable, or the server does not allow " +
+        "cross-origin downloads (CORS). Use a host that does (GitHub raw, Zenodo, Figshare, OSF, a CORS-enabled bucket), " +
+        "or download the file and open it with Open .spk….");
+    }
+    if (!r.ok) throw new Error(`The server answered ${r.status} ${r.statusText}.`);
+    const name = nameFromResponse(r, url), total = +r.headers.get("content-length") || 0;
+    // stream the body so progress can be shown for large recordings
+    const reader = r.body.getReader(), chunks = []; let got = 0, lastUi = 0;
+    for (;;) {
+      const { done, value } = await reader.read(); if (done) break;
+      chunks.push(value); got += value.length;
+      const now = performance.now();
+      if (now - lastUi > 100) { lastUi = now; $("fname").textContent = `Downloading ${name}… ${fmt(got / 1048576, 1)}${total ? ` / ${fmt(total / 1048576, 1)} MB (${Math.round(100 * got / total)}%)` : " MB"}`; }
+    }
+    if (ctl !== urlAbort) return;
+    const head = new Uint8Array(await chunks[0]?.slice(0, 8) ?? []);
+    if (String.fromCharCode(...head) !== "AxionBio" && /text\/html/i.test(r.headers.get("content-type") || ""))
+      throw new Error("The address returned a web page, not a .spk file. Use the direct-download link to the file.");
+    const ok = await load(new File(chunks, name));
+    if (ok && updateAddress) { const q = new URL(location.href); q.searchParams.set("src", raw.trim()); history.replaceState(null, "", q); }
+  } catch (e) {
+    if (e.name === "AbortError") return;
+    $("err").textContent = `Could not load ${url}: ${e.message}`;
+    $("fname").textContent = F ? F.name : (prevName.startsWith("Connecting") ? "No file loaded" : prevName);
+  } finally {
+    if (ctl === urlAbort) { urlAbort = null; $("urlBtn").disabled = false; }
+  }
+}
+$("urlForm").addEventListener("submit", e => { e.preventDefault(); const u = $("urlIn").value.trim(); if (u) loadUrl(u); });
+$("fileIn").addEventListener("change", () => { const q = new URL(location.href); if (q.searchParams.has("src")) { q.searchParams.delete("src"); history.replaceState(null, "", q); } }, true);
+
+// ?src=<url> : open a file at start-up (shareable links; also used by view_spk.py)
+const src = new URLSearchParams(location.search).get("src");
+if (src) { $("urlIn").value = src; loadUrl(src, { updateAddress: false }); }
+</script>
+</body>
+</html>

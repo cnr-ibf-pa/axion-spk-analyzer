@@ -1,0 +1,236 @@
+/* Axion SPK Analyzer: styles shared by index.html, mea_pipeline.html and spk_viewer.html.
+   Colour tokens and the rules common to the pages come first. Each page's own rules follow in its
+   section, limited to that page by the class on its <body> (page-mea, page-viewer, page-home).
+   :where() adds no specificity, so every rule weighs the same as it did inside its page. */
+
+/* ---- Colour tokens: light, dark by system preference, dark chosen with the Theme button ---- */
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781; --grid: #e1e0d9;
+  --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --accent: #2a78d6; --accent-wash: rgba(42,120,214,0.10); --empty: #f0efec; --critical: #d03b3b;
+  --mean: #008300; --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --nb1: #0072b2; --nb2: #d48a00; --nb3: #b5589a;
+  --seq-0: #cde2fb; --seq-1: #9ec5f4; --seq-2: #6da7ec; --seq-3: #3987e5; --seq-4: #256abf; --seq-5: #184f95;
+  --seq-6: #0d366b;
+  --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a; --cat-4: #eda100; --cat-5: #e87ba4; --cat-6: #008300;
+  --cat-7: #6250d6; --cat-8: #e34948;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781; --grid: #2c2c2a;
+    --axis: #383835; --border: rgba(255,255,255,0.10); --accent: #3987e5; --accent-wash: rgba(57,135,229,0.16); --empty: #262624;
+    --nb1: #56b4e9; --nb2: #e69f00; --nb3: #d982bd;
+    --seq-0: #0d366b; --seq-1: #104281; --seq-2: #184f95; --seq-3: #256abf; --seq-4: #3987e5; --seq-5: #6da7ec;
+    --seq-6: #b7d3f6;
+    --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500; --cat-5: #d55181; --cat-6: #008300;
+    --cat-7: #9085e9; --cat-8: #e66767;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781; --grid: #2c2c2a;
+  --axis: #383835; --border: rgba(255,255,255,0.10); --accent: #3987e5; --accent-wash: rgba(57,135,229,0.16); --empty: #262624;
+  --nb1: #56b4e9; --nb2: #e69f00; --nb3: #d982bd;
+  --seq-0: #0d366b; --seq-1: #104281; --seq-2: #184f95; --seq-3: #256abf; --seq-4: #3987e5; --seq-5: #6da7ec;
+  --seq-6: #b7d3f6;
+  --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500; --cat-5: #d55181; --cat-6: #008300;
+  --cat-7: #9085e9; --cat-8: #e66767;
+}
+
+/* ---- Shared by the MEA pipeline and the SPK viewer ---- */
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--page); color: var(--ink); font: 14px/1.45 var(--font); }
+header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+header .file { color: var(--ink-2); overflow-wrap: anywhere; }
+header .spacer { flex: 1; }
+button, .btn { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+button:hover, .btn:hover { background: var(--accent-wash); }
+select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; margin-left: 4px; }
+main { padding: 16px 20px 40px; max-width: 1600px; margin: 0 auto; }
+#drop { border: 2px dashed var(--axis); border-radius: 14px; padding: 64px 20px; text-align: center; color: var(--ink-2); background: var(--surface); }
+#drop.over { border-color: var(--accent); background: var(--accent-wash); }
+#drop h2 { color: var(--ink); font-size: 20px; margin: 0 0 8px; }
+#drop p { margin: 6px 0; }
+.err { color: var(--critical); white-space: pre-wrap; }
+.err:not(:empty) { margin-bottom: 12px; padding: 10px 14px; border: 1px solid var(--critical); border-radius: 10px; background: var(--surface); }
+.tile .k { color: var(--muted); font-size: 12px; }
+.tile .v { font-size: 22px; font-weight: 600; margin-top: 2px; overflow-wrap: anywhere; line-height: 1.2; }
+.toolbar .grow { flex: 1; }
+canvas { display: block; width: 100%; }
+.overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.tbox:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+button:disabled { opacity: .45; cursor: default; background: var(--surface); }
+.kv h4 { margin: 0 0 6px; font-size: 13px; color: var(--ink-2); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+
+/* ---- MEA pipeline (mea_pipeline.html) ---- */
+:where(.page-mea) header { display: flex; align-items: center; gap: 12px 16px; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
+:where(.page-mea) button:focus-visible, :where(.page-mea) .btn:focus-within, :where(.page-mea) select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+:where(.page-mea) input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+:where(.page-mea) .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+:where(.page-mea) .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+:where(.page-mea) .tile .s { color: var(--ink-2); font-size: 12px; overflow-wrap: anywhere; }
+:where(.page-mea) .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; min-width: 0; margin-bottom: 16px; }
+:where(.page-mea) .card h3 { margin: 0; font-size: 15px; font-weight: 600; }
+:where(.page-mea) .sub { color: var(--muted); font-size: 12px; margin: 2px 0 10px; }
+:where(.page-mea) .toolbar { display: flex; gap: 8px 12px; align-items: center; flex-wrap: wrap; color: var(--ink-2); font-size: 13px; }
+:where(.page-mea) #plate { cursor: pointer; touch-action: manipulation; }
+:where(.page-mea) #rate { height: 72px; }
+:where(.page-mea) .tlwrap { position: relative; margin-top: 8px; }
+:where(.page-mea) #tl { height: 64px; cursor: pointer; touch-action: none; }
+:where(.page-mea) .clock { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
+:where(.page-mea) #raster { cursor: crosshair; }
+:where(.page-mea) #rWrap { position: relative; touch-action: none; margin-top: 6px; }
+:where(.page-mea) #rBrush { position: absolute; top: 0; bottom: 30px; background: var(--accent-wash); border-left: 1px solid var(--accent); border-right: 1px solid var(--accent); display: none; pointer-events: none; }
+:where(.page-mea) .tbox { width: 86px; font: inherit; font-variant-numeric: tabular-nums; color: var(--ink); background: var(--page); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; margin: 0 2px; }
+:where(.page-mea) .tbox[aria-invalid="true"] { border-color: var(--critical); }
+:where(.page-mea) #wfMain { height: 340px; }
+:where(.page-mea) .wfgrid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 20px; margin-top: 8px; }
+@media (max-width: 900px) { :where(.page-mea) .wfgrid { grid-template-columns: minmax(0, 1fr); } }
+:where(.page-mea) #wfGrid { cursor: pointer; }
+:where(.page-mea) .wfstats { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 6px 18px; margin-top: 10px; font-size: 13px; }
+:where(.page-mea) .wfstats div { display: flex; flex-direction: column; }
+:where(.page-mea) .wfstats span { color: var(--muted); font-size: 12px; }
+:where(.page-mea) .wfstats b { font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
+:where(.page-mea) .wfgrid h4 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+:where(.page-mea) .ib { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; padding: 0; margin-left: 2px; border-radius: 50%; font: italic 600 11px/1 Georgia, serif; color: var(--accent); background: var(--surface); border: 1px solid var(--accent); vertical-align: 1px; }
+:where(.page-mea) .ib:hover { background: var(--accent-wash); }
+:where(.page-mea) dialog#infoDlg { max-width: min(680px, calc(100vw - 32px)); border: 1px solid var(--border); border-radius: 14px; padding: 18px 22px; background: var(--surface); color: var(--ink); box-shadow: 0 12px 40px rgba(0,0,0,.25); }
+:where(.page-mea) dialog#infoDlg::backdrop { background: rgba(0,0,0,.35); }
+:where(.page-mea) dialog#infoDlg h3 { margin: 0 32px 8px 0; font-size: 16px; }
+:where(.page-mea) dialog#infoDlg p { margin: 8px 0; color: var(--ink-2); line-height: 1.55; }
+:where(.page-mea) dialog#infoDlg math[display="block"] { display: block math; margin: 14px 0; padding: 8px 4px; font-size: 1.45em; color: var(--ink); overflow-x: auto; overflow-y: hidden; max-width: 100%; }
+:where(.page-mea) #infoClose { position: absolute; top: 12px; right: 12px; }
+:where(.page-mea) .fsgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 8px; }
+@media (max-width: 1100px) { :where(.page-mea) .fsgrid { grid-template-columns: minmax(0, 1fr); } }
+:where(.page-mea) .fsgrid h4, :where(.page-mea) .fsblock h4 { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+:where(.page-mea) .fsgrid canvas { height: 220px; }
+:where(.page-mea) .fsparams { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 13px; color: var(--ink-2); margin: 6px 0 10px; }
+:where(.page-mea) .fsparams input { width: 64px; font: inherit; color: var(--ink); background: var(--page); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; margin-left: 6px; }
+:where(.page-mea) .fsblock { margin-top: 18px; }
+:where(.page-mea) .nbparams { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin: 8px 0 4px; font-size: 13px; color: var(--ink-2); }
+:where(.page-mea) .nbparams fieldset { border: 1px solid var(--grid); border-radius: 10px; padding: 6px 12px 10px; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; min-width: 0; }
+:where(.page-mea) .nbparams legend { padding: 0 4px; color: var(--ink); font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+:where(.page-mea) .nbparams input { width: 60px; font: inherit; color: var(--ink); background: var(--page); border: 1px solid var(--border); border-radius: 8px; padding: 3px 6px; margin-left: 6px; }
+:where(.page-mea) .nbparams button:not(.ib) { padding: 3px 8px; }
+:where(.page-mea) .nbgrid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 20px; margin-top: 14px; }
+@media (max-width: 900px) { :where(.page-mea) .nbgrid { grid-template-columns: minmax(0, 1fr); } }
+:where(.page-mea) .nbgrid h4 { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+:where(.page-mea) #nbHist { height: 220px; }
+:where(.page-mea) #nbTl { cursor: pointer; }
+:where(.page-mea) .tscroll { max-height: 440px; overflow: auto; border: 1px solid var(--grid); border-radius: 8px; }
+:where(.page-mea) table.st { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+:where(.page-mea) table.st th, :where(.page-mea) table.st td { padding: 5px 8px; border-bottom: 1px solid var(--grid); text-align: left; white-space: nowrap; }
+:where(.page-mea) table.st th { position: sticky; top: 0; background: var(--surface); color: var(--ink-2); font-weight: 600; cursor: pointer; z-index: 1; }
+:where(.page-mea) table.st .n { text-align: right; font-variant-numeric: tabular-nums; }
+:where(.page-mea) table.st tbody tr[data-c] { cursor: pointer; }
+:where(.page-mea) table.st tbody tr[data-c]:hover { background: var(--accent-wash); }
+:where(.page-mea) table.st tr.sel { background: var(--accent-wash); box-shadow: inset 3px 0 0 var(--accent); }
+:where(.page-mea) table.st tr.inactive td { color: var(--muted); }
+:where(.page-mea) table.st tr.grp td { border-top: 2px solid var(--axis); }
+:where(.page-mea) .legend { display: flex; align-items: center; gap: 8px 14px; color: var(--ink-2); font-size: 12px; margin-top: 10px; flex-wrap: wrap; }
+:where(.page-mea) .legend > span { display: inline-flex; align-items: center; gap: 6px; }
+:where(.page-mea) .ramp { width: 160px; height: 10px; border-radius: 5px; display: inline-block; }
+:where(.page-mea) .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--border); flex: none; }
+:where(.page-mea) .selbar { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; padding: 10px 14px; margin-top: 12px; border-radius: 10px; background: var(--accent-wash); font-size: 13px; color: var(--ink-2); }
+:where(.page-mea) .selbar b { color: var(--ink); font-size: 14px; }
+:where(.page-mea) #tip { position: fixed; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--border); box-shadow: 0 4px 16px rgba(0,0,0,.12); border-radius: 8px; padding: 6px 10px; font-size: 12px; display: none; z-index: 10; max-width: 320px; }
+:where(.page-mea) details.card > summary { cursor: pointer; font-weight: 600; }
+:where(.page-mea) .kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-top: 10px; }
+:where(.page-mea) td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--grid); vertical-align: top; overflow-wrap: anywhere; }
+:where(.page-mea) .kv td:first-child { color: var(--ink-2); width: 42%; }
+@media (max-width: 600px) { :where(.page-mea) .tile .v { font-size: 19px; } }
+
+/* ---- SPK viewer (spk_viewer.html) ---- */
+:where(.page-viewer) header { display: flex; align-items: center; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
+:where(.page-viewer) input[type=file] { display: none; }
+:where(.page-viewer) .urlform { display: flex; gap: 6px; flex: 1 1 320px; max-width: 520px; }
+:where(.page-viewer) .urlform input { flex: 1; min-width: 0; font: inherit; color: var(--ink); background: var(--page); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
+:where(.page-viewer) .urlform input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+:where(.page-viewer) .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+:where(.page-viewer) .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+:where(.page-viewer) .tile .s { color: var(--ink-2); font-size: 12px; }
+:where(.page-viewer) .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; min-width: 0; }
+:where(.page-viewer) .card h3 { margin: 0 0 2px; font-size: 14px; font-weight: 600; }
+:where(.page-viewer) .card .sub { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+:where(.page-viewer) .row { display: grid; gap: 16px; margin-bottom: 16px; }
+:where(.page-viewer) .r1 { grid-template-columns: minmax(320px, 5fr) minmax(0, 7fr); }
+:where(.page-viewer) .r2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 980px) { :where(.page-viewer) .r1, :where(.page-viewer) .r2 { grid-template-columns: minmax(0,1fr); } }
+:where(.page-viewer) #plate { height: 360px; cursor: pointer; }
+:where(.page-viewer) #raster { height: 520px; cursor: crosshair; }
+:where(.page-viewer) .chart { height: 240px; }
+:where(.page-viewer) .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; color: var(--ink-2); font-size: 13px; }
+:where(.page-viewer) .legend { display: flex; align-items: center; gap: 8px; color: var(--ink-2); font-size: 12px; margin-top: 8px; flex-wrap: wrap; }
+:where(.page-viewer) .ramp { width: 140px; height: 10px; border-radius: 5px; }
+:where(.page-viewer) .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; border: 1px solid var(--border); }
+:where(.page-viewer) #tip { position: fixed; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--border); box-shadow: 0 4px 16px rgba(0,0,0,.12); border-radius: 8px; padding: 6px 10px; font-size: 12px; display: none; z-index: 10; white-space: nowrap; }
+:where(.page-viewer) #tip b { font-weight: 600; }
+:where(.page-viewer) .wrap-rel { position: relative; }
+:where(.page-viewer) .wgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+:where(.page-viewer) .wwell { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px 10px; min-width: 0; }
+:where(.page-viewer) .wwell h4 { margin: 0 0 6px; font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+:where(.page-viewer) .wwell h4 span { color: var(--muted); font-weight: 400; font-size: 12px; }
+:where(.page-viewer) .wwell canvas { cursor: pointer; }
+:where(.page-viewer) .replay { margin-bottom: 16px; padding-bottom: 8px; }
+:where(.page-viewer) #timeline { height: 64px; cursor: pointer; touch-action: none; }
+:where(.page-viewer) .clock { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; min-width: 150px; }
+:where(.page-viewer) #brush, :where(.page-viewer) #sbBrush, :where(.page-viewer) #trBrush { position: absolute; top: 0; bottom: 0; background: var(--accent-wash); border-left: 1px solid var(--accent); border-right: 1px solid var(--accent); display: none; pointer-events: none; }
+:where(.page-viewer) details { margin-bottom: 16px; }
+:where(.page-viewer) details > summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+:where(.page-viewer) th, :where(.page-viewer) td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--grid); }
+:where(.page-viewer) th { color: var(--ink-2); font-weight: 600; cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--surface); }
+:where(.page-viewer) td.n, :where(.page-viewer) th.n { text-align: right; font-variant-numeric: tabular-nums; }
+:where(.page-viewer) tbody tr { cursor: pointer; }
+:where(.page-viewer) tbody tr:hover { background: var(--accent-wash); }
+:where(.page-viewer) tbody tr.sel { background: var(--accent-wash); box-shadow: inset 3px 0 0 var(--accent); }
+:where(.page-viewer) .scroll { max-height: 420px; overflow: auto; }
+:where(.page-viewer) .kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+:where(.page-viewer) .kv td:first-child { color: var(--ink-2); width: 45%; }
+:where(.page-viewer) .selname { font-weight: 600; color: var(--ink); }
+:where(.page-viewer) .sortgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; }
+:where(.page-viewer) .sortgrid h4 { margin: 0 0 6px; font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+:where(.page-viewer) #sortPca, :where(.page-viewer) #sortTpl, :where(.page-viewer) #sortPca3 { height: 300px; }
+:where(.page-viewer) #sortPca3 { cursor: grab; touch-action: none; }
+:where(.page-viewer) #trace { height: 240px; cursor: crosshair; touch-action: none; }
+:where(.page-viewer) .sbgrid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 16px; }
+@media (max-width: 980px) { :where(.page-viewer) .sbgrid { grid-template-columns: minmax(0, 1fr); } }
+:where(.page-viewer) #sbScatter { height: 320px; cursor: crosshair; touch-action: none; }
+:where(.page-viewer) #sbWave { height: 320px; }
+:where(.page-viewer) #sbLegend label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+:where(.page-viewer) #sbLegend input { margin: 0; accent-color: var(--accent); }
+:where(.page-viewer) .tbox { width: 92px; font: inherit; font-variant-numeric: tabular-nums; color: var(--ink); background: var(--page); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; margin: 0 2px; }
+:where(.page-viewer) .tbox[aria-invalid="true"] { border-color: var(--critical); outline-color: var(--critical); }
+:where(.page-viewer) #sbInfo { color: var(--ink-2); font-size: 13px; margin-top: 8px; min-height: 1.4em; }
+:where(.page-viewer) #sortPca3.grabbing { cursor: grabbing; }
+:where(.page-viewer) #sortPca { cursor: crosshair; }
+:where(.page-viewer) .sortparams { margin: 6px 0 4px; }
+:where(.page-viewer) .sortparams summary { font-weight: 400; color: var(--ink-2); font-size: 13px; }
+:where(.page-viewer) .pgrid { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; padding: 8px 0 2px; font-size: 13px; color: var(--ink-2); }
+:where(.page-viewer) .pgrid input { width: 72px; font: inherit; color: var(--ink); background: var(--page); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; margin-left: 6px; }
+:where(.page-viewer) #unitTable tr.unsorted td { color: var(--muted); }
+:where(.page-viewer) #unitTable td { white-space: nowrap; }
+:where(.page-viewer) #unitTable input { margin: 0; accent-color: var(--accent); }
+:where(.page-viewer) #sortSub { color: var(--ink-2); font-size: 13px; margin: 6px 0 12px; }
+:where(.page-viewer) #sortStatus { color: var(--muted); font-size: 12px; }
+@media (max-width: 600px) { :where(.page-viewer) #raster { height: 420px; } }
+
+/* ---- Landing page (index.html) ---- */
+body:where(.page-home) { background: var(--page); color: var(--ink); font: 15px/1.5 var(--font); }
+:where(.page-home) main { max-width: 760px; margin: 0 auto; padding: 40px 16px 56px; }
+:where(.page-home) h1 { font-size: 26px; margin: 0 0 6px; letter-spacing: -0.01em; }
+:where(.page-home) .lead { color: var(--ink-2); margin: 0 0 28px; }
+:where(.page-home) .apps { display: grid; gap: 14px; }
+:where(.page-home) a.app { display: block; text-decoration: none; color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+:where(.page-home) a.app:hover { background: var(--accent-wash); border-color: var(--accent); }
+:where(.page-home) a.app:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:where(.page-home) a.app h2 { font-size: 17px; margin: 0 0 4px; color: var(--accent); }
+:where(.page-home) a.app p { margin: 0; color: var(--ink-2); }
+:where(.page-home) .note { margin-top: 28px; color: var(--muted); font-size: 13px; }
+:where(.page-home) .note a { color: var(--accent); }
+
+/* ---- Narrow screens, shared (kept last, as in the pages) ---- */
+@media (max-width: 600px) { :where(.page-mea, .page-viewer) main { padding: 12px 16px 32px; } }
+@media (max-width: 600px) { :where(.page-mea, .page-viewer) header { padding: 12px 16px; } }

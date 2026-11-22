@@ -1,0 +1,13 @@
+# Recordings and exports stay out of the repository
+*.spk
+*.raw
+*.nex
+*.mat
+*.csv
+
+# Python
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
