@@ -1,6 +1,6 @@
 """Compare the firing statistics computed by mea_pipeline.html (dumped by dump_page_stats.js)
 with firing_stats.py, electrode by electrode.
-   node dump_page_stats.js ../mea_pipeline.html recording.spk /tmp/page.json [t0 t1]
+   node dump_page_stats.js .. recording.spk /tmp/page.json [t0 t1]
    python compare_firing_stats.py recording.spk /tmp/page.json [t0 t1]"""
 import json, math, os, sys
 import numpy as np

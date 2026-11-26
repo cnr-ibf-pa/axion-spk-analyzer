@@ -217,7 +217,7 @@ class SpikeFile:
         return np.array([self._label(ch[i]) if i >= 0 else "?" for i in idx])
 
     def sort(self, electrodes=None, **params):
-        """SAMS-style automatic spike sorting (see axion_sort.py); same results as the viewer."""
+        """SAMS-style automatic spike sorting (see axion_sort.py); same results as the former browser viewer (docs/pca_spike_sorting.md)."""
         from axion_sort import sort_spikes
         return sort_spikes(self, electrodes=electrodes, **params)
 

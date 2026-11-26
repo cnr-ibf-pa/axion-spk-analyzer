@@ -1,5 +1,5 @@
 """Compare the network bursts detected by mea_pipeline.html (dumped by dump_page_nb.js) with network_bursts.py.
-   node dump_page_nb.js ../mea_pipeline.html recording.spk /tmp/nb.json [t0 t1]
+   node dump_page_nb.js .. recording.spk /tmp/nb.json [t0 t1]
    python compare_network_bursts.py recording.spk /tmp/nb.json [t0 t1]"""
 import json, math, os, sys
 import numpy as np

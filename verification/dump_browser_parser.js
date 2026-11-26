@@ -1,13 +1,10 @@
-// Run the browser page's own .spk parser (parseSpk, extracted verbatim from the HTML) in Node
-// and dump every spike field, for compare_browser_parser.py.
-//   node dump_browser_parser.js ../spk_viewer.html recording.spk /tmp/out
-const fs = require("fs");
-const [html, inp, out] = process.argv.slice(2);
-const page = fs.readFileSync(html, "utf8");
-const a = page.indexOf("const PLATES = {"), b = page.indexOf("\nfunction parseSpk(");
-const end = page.indexOf("\n}\n", b) + 3;                       // end of parseSpk
-if (a < 0 || b < 0) throw new Error("parseSpk not found in " + html);
-const parseSpk = new Function(page.slice(a, end) + "\nreturn parseSpk;")();
+// Run the web app's own .spk parser (js/spk_reader.js) in Node and dump every spike field,
+// for compare_browser_parser.py. The first argument is the app folder (or a file in it).
+//   node dump_browser_parser.js .. recording.spk /tmp/out
+const fs = require("fs"), path = require("path");
+const [appArg, inp, out] = process.argv.slice(2);
+const app = fs.statSync(appArg).isDirectory() ? appArg : path.dirname(appArg);
+const parseSpk = new Function(fs.readFileSync(path.join(app, "js", "spk_reader.js"), "utf8") + "\nreturn parseSpk;")();
 const buf0 = fs.readFileSync(inp), buf = buf0.buffer.slice(buf0.byteOffset, buf0.byteOffset + buf0.byteLength);
 const F = parseSpk(buf), ns = F.header.NumSamplesPerBlock;
 const wf = new Int16Array(F.n * ns);

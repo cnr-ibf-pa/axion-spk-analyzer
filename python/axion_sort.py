@@ -1,10 +1,11 @@
 """
 axion_sort.py - SAMS-style automatic spike sorting for Axion .spk files (numpy only).
 
-A Python port of the sorter in spk_viewer.html, itself a port of the automatic
-pipeline of SAMS (Ren et al. 2025, bioRxiv doi:10.1101/2025.02.08.637245,
-src/process_electrode.m). It uses the same algorithm, defaults and random number
-generator as the browser, so both give the same units for the same file.
+A Python port of the sorter of the former spk_viewer.html (its code is kept in
+docs/pca_sorting_reference.js, described in docs/pca_spike_sorting.md), itself a
+port of the automatic pipeline of SAMS (Ren et al. 2025, bioRxiv
+doi:10.1101/2025.02.08.637245, src/process_electrode.m). It used the same algorithm,
+defaults and random number generator as the browser, and gave the same units.
 
 Per electrode:
   1. PCA of the waveforms
@@ -49,7 +50,7 @@ DEFAULTS = dict(merge_thr=1.5, overlap=0.7, refractory_ms=1.5, sd_cut=3.0, min_r
 
 # --------------------------------------------------------------------------- RNG
 class Mulberry32:
-    """mulberry32, identical to the browser's mulberry() so results match the viewer."""
+    """mulberry32, identical to the browser's mulberry() so results matched the former viewer."""
     def __init__(self, seed: int):
         self.a = seed & 0xFFFFFFFF
 
@@ -243,7 +244,7 @@ _DIP_NULL: dict = {}   # sample size -> [dips of uniform samples, rng state]
 
 def dip_multimodal(vals, rnd, nboot: int = 200, cap: int = 2000, alpha: float = 0.05) -> bool:
     """True when the dip test rejects unimodality (p < alpha). Same subsampling and
-    bootstrap null as the viewer; the null is only extended as far as the decision needs."""
+    bootstrap null as the former viewer; the null is only extended as far as the decision needs."""
     v = np.asarray(vals, dtype=np.float64).copy()
     if len(v) > cap:
         for i in range(cap):
@@ -376,7 +377,7 @@ def sort_electrode(W, times, noise_v, duration, channel=0, label="", spike_index
     """Sort one electrode.
     W: (n, samples) waveforms in uV (float32), time-ordered; times: spike times (s);
     noise_v: detector noise SD per spike (V); duration: recording length (s);
-    channel: channel-array index (seeds the random generator, as in the viewer)."""
+    channel: channel-array index (seeds the random generator, as in the former viewer)."""
     prm = {**DEFAULTS, **params}
     t0 = time.perf_counter()
     n = len(W)
@@ -401,7 +402,7 @@ def sort_electrode(W, times, noise_v, duration, channel=0, label="", spike_index
         if len(g) <= 10:
             continue
         m1 = dip_multimodal(scores[g, 0], rnd)
-        m2 = dip_multimodal(scores[g, 1], rnd)   # always run both: each draws from the generator, as in the viewer
+        m2 = dip_multimodal(scores[g, 1], rnd)   # always run both: each draws from the generator, as in the former viewer
         if m1 or m2:
             sub = split(g)
             if len(sub) > 1:
@@ -467,7 +468,7 @@ class SortResult:
         return rows
 
     def write_units_csv(self, path):
-        """Same columns and formatting as the viewer's 'Export units (CSV)'."""
+        """Same columns and formatting as the former viewer's 'Export units (CSV)'."""
         f = lambda v, d: "" if v is None or (isinstance(v, float) and math.isnan(v)) else f"{v:.{d}f}"
         with open(path, "w") as fh:
             fh.write("electrode,well,treatment,unit,spikes,rate_hz,peak_to_peak_uV,peak_uV,snr,isi_cv,min_isi_ms,refractory_removed,unsorted_on_electrode\n")

@@ -5,7 +5,7 @@ Checks that our readers return exactly what Axion's own software reads from a `.
 | Check | Reference | Script |
 |---|---|---|
 | Python reader vs Axion **Data Export Tool** | `.nex` exported by Axion from the same `.spk` | `compare_with_nex.py recording.spk recording.nex` |
-| Browser parser vs Python reader | — | `node dump_browser_parser.js ../spk_viewer.html recording.spk /tmp/out` then `compare_browser_parser.py recording.spk /tmp/out` |
+| Browser parser vs Python reader | — | `node dump_browser_parser.js .. recording.spk /tmp/out` (runs `js/spk_reader.js`; `..` is the app folder) then `compare_browser_parser.py recording.spk /tmp/out` |
 | Python reader vs Axion's **MATLAB loader** (AxionFileLoader) | `.mat` written by Axion's loader | in MATLAB: `export_with_axion_loader('<AxionFileLoader folder>', 'recording.spk', 'axion_ref.mat')`, then `compare_with_axion_loader.py recording.spk axion_ref.mat` |
 
 `nexread.py` is a minimal reader of the documented NeuroExplorer (.nex) format, used by `compare_with_nex.py`.
@@ -26,16 +26,18 @@ For each recording:
 
 The export's scaling equals the file's `VoltageScale`, sign included, which confirms that voltage = sample × `VoltageScale`.
 
-**Browser parser (`spk_viewer.html`) vs Python reader**, on 7 recordings: the SAMS sample and the six CytoView files.
+**Browser parser vs Python reader**, on 7 recordings: the SAMS sample and the six CytoView files. This was run on the parser of the former `spk_viewer.html`, from which `js/spk_reader.js` is taken.
 - These fields are bit-identical for every spike: time, trigger offset, electrode, every waveform sample and the threshold multiplier.
 - The detector noise SD differs only because the page keeps it in single precision (relative error ≈ 1e-7).
 - The header values are also equal: n, sampling frequency, VoltageScale, duration, plate type and channel count.
 
 **Against Axion's MATLAB loader**: not run yet, because MATLAB isn't installed on this Mac. The comparison script was tested on a reference built in the same layout: it passes correct data and catches a single changed sample. The MATLAB export script itself is untested.
 
+On 2026-11-23 the check was re-run on `js/spk_reader.js` itself with the test file `DIV98_PTX` (154,934 spikes): identical in every field. The noise SD and threshold multiplier are now equal too, because this reader keeps them in double precision.
+
 ## Firing statistics (mea_pipeline.html vs firing_stats.py)
 
-`node dump_page_stats.js ../mea_pipeline.html recording.spk /tmp/page.json [t0 t1]`, then `python3 compare_firing_stats.py recording.spk /tmp/page.json [t0 t1]`. The Node script runs the page's own parser and statistics code.
+`node dump_page_stats.js .. recording.spk /tmp/page.json [t0 t1]`, then `python3 compare_firing_stats.py recording.spk /tmp/page.json [t0 t1]`. The Node script runs the page's own parser and statistics code (`js/spk_reader.js`, `js/analysis.js`); `..` is the app folder.
 
 The two implementations were checked on 2026-11-11 against each other:
 
@@ -54,7 +56,7 @@ Spike time convention: our spike time is `(startingSample + triggerSample) / Sam
 
 ## Network bursts (mea_pipeline.html vs network_bursts.py)
 
-`node dump_page_nb.js ../mea_pipeline.html recording.spk /tmp/nb.json [t0 t1]`, then `python3 compare_network_bursts.py recording.spk /tmp/nb.json [t0 t1]`. The Node script runs the page's own parser, STATS block and NB block, with the panel's default parameters.
+`node dump_page_nb.js .. recording.spk /tmp/nb.json [t0 t1]`, then `python3 compare_network_bursts.py recording.spk /tmp/nb.json [t0 t1]`. The Node script runs the page's own parser and the STATS and NB blocks of `js/analysis.js`, with the panel's default parameters; `..` is the app folder.
 
 Checked on 2026-11-11:
 

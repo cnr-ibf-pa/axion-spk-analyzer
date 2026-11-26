@@ -1,12 +1,12 @@
-// Compute the firing statistics with the page's own code (parser + STATS block of mea_pipeline.html) in Node,
-// for compare_firing_stats.py.   node dump_page_stats.js ../mea_pipeline.html recording.spk out.json [t0 t1]
+// Compute the firing statistics with the page's own code (js/spk_reader.js + js/analysis.js) in Node,
+// for compare_firing_stats.py.   node dump_page_stats.js .. recording.spk out.json [t0 t1]   (.. = the app folder)
 const fs = require("fs");
-const [html, spk, out, t0s, t1s] = process.argv.slice(2);
-const page = fs.readFileSync(html, "utf8");
-const pa = page.indexOf("const PLATES = {"), pb = page.indexOf("\nfunction parseSpk("), pe = page.indexOf("\n}\n", pb) + 3;
-const sa = page.indexOf("/* STATS-BEGIN"), se = page.indexOf("/* STATS-END */");
-if (pa < 0 || pb < 0 || sa < 0 || se < 0) throw new Error("parser or STATS block not found");
-const lib = new Function(page.slice(pa, pe) + "\n" + page.slice(sa, se) + "\nreturn { parseSpk, electrodeStats, autocorrelogram, isiHistogram };")();
+const [appArg, spk, out, t0s, t1s] = process.argv.slice(2);
+// The page's analysis code: js/spk_reader.js + js/analysis.js of the app folder (or of the folder of mea_pipeline.html).
+const path = require("path");
+const app = /\.html?$/i.test(appArg) ? path.dirname(appArg) : appArg;
+const src = ["spk_reader.js", "analysis.js"].map(f => fs.readFileSync(path.join(app, "js", f), "utf8")).join("\n");
+const lib = new Function(src + "\nreturn { parseSpk, electrodeStats, autocorrelogram, isiHistogram };")();
 const b0 = fs.readFileSync(spk), F = lib.parseSpk(b0.buffer.slice(b0.byteOffset, b0.byteOffset + b0.byteLength));
 const dur = F.header.Duration || F.times[F.n - 1], a = t0s ? +t0s : 0, T = (t1s ? +t1s : dur) - a;
 const prm = { activePerMin: 5, fanoBin: 1, shortIsi: 0.0015, minIsi: 20 };

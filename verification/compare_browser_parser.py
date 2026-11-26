@@ -1,5 +1,5 @@
 """Compare the browser page's parser (dumped by dump_browser_parser.js) with axion_spk.read_spk, spike by spike.
-   node dump_browser_parser.js ../spk_viewer.html recording.spk /tmp/out
+   node dump_browser_parser.js .. recording.spk /tmp/out
    python compare_browser_parser.py recording.spk /tmp/out"""
 import json, os, sys
 import numpy as np

@@ -1,12 +1,12 @@
-// Detect network bursts with the page's own code (parser + STATS and NB blocks of mea_pipeline.html) in Node,
-// for compare_network_bursts.py.   node dump_page_nb.js ../mea_pipeline.html recording.spk out.json [t0 t1]
+// Detect network bursts with the page's own code (js/spk_reader.js + js/analysis.js) in Node,
+// for compare_network_bursts.py.   node dump_page_nb.js .. recording.spk out.json [t0 t1]   (.. = the app folder)
 const fs = require("fs");
-const [html, spk, out, t0s, t1s] = process.argv.slice(2);
-const page = fs.readFileSync(html, "utf8");
-const cut = (a, b) => { const i = page.indexOf(a), j = page.indexOf(b, i); if (i < 0 || j < 0) throw new Error(`block ${a} not found`); return page.slice(i, j); };
-const pb = page.indexOf("\nfunction parseSpk("), pe = page.indexOf("\n}\n", pb) + 3;
-const lib = new Function(page.slice(page.indexOf("const PLATES = {"), pe) + "\n" + cut("/* STATS-BEGIN", "/* STATS-END */") + "\n" + cut("/* NB-BEGIN", "/* NB-END */")
-  + "\nreturn { parseSpk, electrodeStats, nbWell, nbIsinValues, nbIsinHist, nbValley };")();
+const [appArg, spk, out, t0s, t1s] = process.argv.slice(2);
+// The page's analysis code: js/spk_reader.js + js/analysis.js of the app folder (or of the folder of mea_pipeline.html).
+const path = require("path");
+const app = /\.html?$/i.test(appArg) ? path.dirname(appArg) : appArg;
+const src = ["spk_reader.js", "analysis.js"].map(f => fs.readFileSync(path.join(app, "js", f), "utf8")).join("\n");
+const lib = new Function(src + "\nreturn { parseSpk, electrodeStats, nbWell, nbIsinValues, nbIsinHist, nbValley };")();
 const b0 = fs.readFileSync(spk), F = lib.parseSpk(b0.buffer.slice(b0.byteOffset, b0.byteOffset + b0.byteLength));
 const dur = F.header.Duration || F.times[F.n - 1], a = t0s ? +t0s : 0, T = (t1s ? +t1s : dur) - a;
 // page defaults (ms and % as typed in the panel)
