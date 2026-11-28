@@ -6,8 +6,8 @@
 /* ---- Colour tokens: light, dark by system preference, dark chosen with the Theme button ---- */
 :root {
   color-scheme: light;
-  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781; --grid: #e1e0d9;
-  --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --accent: #2a78d6; --accent-wash: rgba(42,120,214,0.10); --empty: #f0efec; --critical: #d03b3b; --warning: #a35f00; --warning-wash: rgba(237,161,0,0.12);
+  --page: #e6e5df; --surface: #ffffff; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781; --grid: #e1e0d9;
+  --axis: #c3c2b7; --border: rgba(11,11,11,0.18); --panel-head: #e5eef9; --panel-shadow: 0 1px 3px rgba(11,11,11,.10), 0 1px 2px rgba(11,11,11,.06); --accent: #2a78d6; --accent-wash: rgba(42,120,214,0.10); --empty: #f0efec; --critical: #d03b3b; --warning: #a35f00; --warning-wash: rgba(237,161,0,0.12);
   --meas-n: #0f6e6e; --meas-r: #7445b0; --meas-d: #9a5a00; /* spider labels: count, rate, median duration */
   --mean: #008300; --font: system-ui, -apple-system, "Segoe UI", sans-serif;
   --nb1: #0072b2; --nb2: #d48a00; --nb3: #b5589a;
@@ -19,8 +19,8 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781; --grid: #2c2c2a;
-    --axis: #383835; --border: rgba(255,255,255,0.10); --accent: #3987e5; --accent-wash: rgba(57,135,229,0.16); --empty: #262624; --warning: #f0b44a; --warning-wash: rgba(240,180,74,0.12); --meas-n: #5cc8c8; --meas-r: #b9a2ec; --meas-d: #f0b44a;
+    --page: #000000; --surface: #262624; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #9a9892; --grid: #3a3a37;
+    --axis: #4a4a46; --border: rgba(255,255,255,0.24); --panel-head: #1c2a3c; --panel-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 2px 6px rgba(0,0,0,.6); --accent: #3987e5; --accent-wash: rgba(57,135,229,0.16); --empty: #333331; --warning: #f0b44a; --warning-wash: rgba(240,180,74,0.12); --meas-n: #5cc8c8; --meas-r: #b9a2ec; --meas-d: #f0b44a;
     --nb1: #56b4e9; --nb2: #e69f00; --nb3: #d982bd;
     --seq-0: #0d366b; --seq-1: #104281; --seq-2: #184f95; --seq-3: #256abf; --seq-4: #3987e5; --seq-5: #6da7ec;
     --seq-6: #b7d3f6;
@@ -30,8 +30,8 @@
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781; --grid: #2c2c2a;
-  --axis: #383835; --border: rgba(255,255,255,0.10); --accent: #3987e5; --accent-wash: rgba(57,135,229,0.16); --empty: #262624; --warning: #f0b44a; --warning-wash: rgba(240,180,74,0.12); --meas-n: #5cc8c8; --meas-r: #b9a2ec; --meas-d: #f0b44a;
+  --page: #000000; --surface: #262624; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #9a9892; --grid: #3a3a37;
+  --axis: #4a4a46; --border: rgba(255,255,255,0.24); --panel-head: #1c2a3c; --panel-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 2px 6px rgba(0,0,0,.6); --accent: #3987e5; --accent-wash: rgba(57,135,229,0.16); --empty: #333331; --warning: #f0b44a; --warning-wash: rgba(240,180,74,0.12); --meas-n: #5cc8c8; --meas-r: #b9a2ec; --meas-d: #f0b44a;
   --nb1: #56b4e9; --nb2: #e69f00; --nb3: #d982bd;
   --seq-0: #0d366b; --seq-1: #104281; --seq-2: #184f95; --seq-3: #256abf; --seq-4: #3987e5; --seq-5: #6da7ec;
   --seq-6: #b7d3f6;
@@ -71,10 +71,12 @@ table { border-collapse: collapse; width: 100%; font-size: 15px; }
 :where(.page-mea) button:focus-visible, :where(.page-mea) .btn:focus-within, :where(.page-mea) select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 :where(.page-mea) input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 :where(.page-mea) .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
-:where(.page-mea) .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+:where(.page-mea) .tile { background: var(--surface); border: 1px solid var(--border); box-shadow: var(--panel-shadow); border-radius: 12px; padding: 12px 14px; min-width: 0; }
 :where(.page-mea) .tile .s { color: var(--ink-2); font-size: 14px; overflow-wrap: anywhere; }
-:where(.page-mea) .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; min-width: 0; margin-bottom: 16px; }
-:where(.page-mea) .card h3 { margin: 0; font-size: 17px; font-weight: 600; }
+:where(.page-mea) .card { background: var(--surface); border: 1px solid var(--border); box-shadow: var(--panel-shadow); border-radius: 12px; padding: 14px 16px; min-width: 0; margin-bottom: 16px; }
+:where(.page-mea) .card h3 { margin: 0; font-size: 19px; font-weight: 600; }
+:where(.page-mea) .card > .toolbar:first-child, :where(.page-mea) details.card > summary { background: var(--panel-head); margin: -14px -16px 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); border-radius: 11px 11px 0 0; } /* title band of each panel */
+:where(.page-mea) .card.collapsed > .toolbar:first-child, :where(.page-mea) details.card:not([open]) > summary { margin-bottom: -14px; border-bottom: 0; border-radius: 11px; } /* collapsed: the band is the whole panel */
 :where(.page-mea) .sub { color: var(--muted); font-size: 14px; margin: 2px 0 10px; }
 :where(.page-mea) .coll { width: 26px; height: 26px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--ink-2); cursor: pointer; font-size: 15px; line-height: 1; }
 :where(.page-mea) .coll:hover { color: var(--ink); border-color: var(--axis); }
@@ -201,7 +203,7 @@ body:where(.page-home) { background: var(--page); color: var(--ink); font: 17px/
 :where(.page-home) h1 { font-size: 28px; margin: 0 0 6px; letter-spacing: -0.01em; }
 :where(.page-home) .lead { color: var(--ink-2); margin: 0 0 28px; }
 :where(.page-home) .apps { display: grid; gap: 14px; }
-:where(.page-home) a.app { display: block; text-decoration: none; color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+:where(.page-home) a.app { display: block; text-decoration: none; color: inherit; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--panel-shadow); border-radius: 12px; padding: 16px 18px; }
 :where(.page-home) a.app:hover { background: var(--accent-wash); border-color: var(--accent); }
 :where(.page-home) a.app:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 :where(.page-home) a.app h2 { font-size: 19px; margin: 0 0 4px; color: var(--accent); }
